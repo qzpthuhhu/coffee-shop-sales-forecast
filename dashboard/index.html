@@ -124,9 +124,22 @@ code { font-size:0.85rem; background:#252836; padding:2px 6px; border-radius:4px
 
   <!-- === SECTION 2: Feature Importance === -->
   <div class="card">
-    <h2>特征重要性排名</h2>
-    <p style="color:var(--text2);font-size:0.9rem;margin-bottom:16px;">Permutation Importance — 特征被随机打乱后模型精度的下降幅度</p>
+    <h2>SHAP 特征重要性</h2>
+    <p style="color:var(--text2);font-size:0.9rem;margin-bottom:12px;">
+      TreeSHAP — 模型对每个预测的特征贡献期望值。<code>sku_share</code>（该品类在当日门店的销量占比）和 <code>month</code> 是核心驱动因子。
+    </p>
+    <div class="lvl-select" style="margin-bottom:12px;">
+      <label>查看维度：</label>
+      <button class="tab active" onclick="switchFIMode('global',this)" id="fi-btn-global">全局平均</button>
+      <button class="tab" onclick="switchFIMode('daily',this)" id="fi-btn-daily">按天查看</button>
+    </div>
+    <div id="fi-daily-select" style="display:none;margin-bottom:12px;">
+      <label>选择日期：</label>
+      <select id="fi-date-select" onchange="renderDailySHAP()"></select>
+      <span style="color:var(--text2);font-size:0.8rem;margin-left:8px;" id="fi-shap-note"></span>
+    </div>
     <div class="fi-grid" id="fi-grid"></div>
+    <p style="color:var(--text2);font-size:0.75rem;margin-top:8px;" id="fi-note"></p>
   </div>
 
   <!-- === SECTION 3: Methodology === -->
@@ -287,21 +300,74 @@ function switchLevel() {
 }
 
 // ==================== FEATURE IMPORTANCE ====================
-function renderFI() {
+let fiMode = 'global';
+
+function switchFIMode(mode, btn) {
+  fiMode = mode;
+  document.querySelectorAll('#fi-btn-global,#fi-btn-daily').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  
+  if (mode === 'daily') {
+    document.getElementById('fi-daily-select').style.display = 'block';
+    // Populate date dropdown
+    const sel = document.getElementById('fi-date-select');
+    const dates = DATA.test_dates || Object.keys(DATA.per_day_shap || {});
+    sel.innerHTML = dates.map(d => `<option value="${d}">${d}</option>`).join('');
+    renderDailySHAP();
+  } else {
+    document.getElementById('fi-daily-select').style.display = 'none';
+    renderGlobalFI();
+  }
+}
+
+function renderGlobalFI() {
   const grid = document.getElementById('fi-grid');
   const items = DATA.feature_importance;
+  if (!items || !items.length) { grid.innerHTML = '<p style="color:var(--text2)">无数据</p>'; return; }
   const max = items[0]?.importance || 1;
   grid.innerHTML = items.map((f,i) => {
-    const w = (f.importance / max * 100);
-    const colorMap = {时序:'#6366f1',天气:'#06b6d4',日历:'#22c55e',节假日:'#f59e0b',品类:'#ec4899'};
-    const color = colorMap[f.category] || '#8b5cf6';
+    const w = Math.max(1, (f.importance / max * 100));
+    const cm = {时序:'#6366f1',天气:'#06b6d4',日历:'#22c55e',节假日:'#f59e0b',品类:'#ec4899',品类/价格:'#ec4899'};
+    const color = cm[f.category] || '#8b5cf6';
     return `<div class="fi-item">
       <span class="fi-rank">#${i+1}</span>
-      <span class="fi-name">${f.feature}</span>
+      <span class="fi-name" title="${f.feature}">${f.feature}</span>
       <div class="fi-bar-bg"><div class="fi-bar" style="width:${w}%;background:${color}"></div></div>
-      <span class="fi-pct">${f.importance.toFixed(2)}%</span>
+      <span class="fi-pct">${f.importance.toFixed(4)}</span>
     </div>`;
   }).join('');
+  document.getElementById('fi-note').textContent = DATA.shap_note || 'TreeSHAP — 特征对预测的期望贡献（SHAP绝对值均值）';
+}
+
+function renderDailySHAP() {
+  const grid = document.getElementById('fi-grid');
+  const d = document.getElementById('fi-date-select')?.value || (DATA.test_dates||[])[0];
+  const items = (DATA.per_day_shap || {})[d];
+  if (!items || !items.length) { grid.innerHTML = '<p style="color:var(--text2)">该日期无 SHAP 数据</p>'; return; }
+  
+  const max = items[0]?.importance || 1;
+  // Also show weather context
+  const w = DATA.weather_info?.[d];
+  let weatherNote = '';
+  if (w) {
+    weatherNote = ` | 均温 ${w.temp_mean}°C | 降水 ${w.precipitation}mm | ${w.is_rain?'有雨':'无雨'} | ${w.is_holiday?w.holiday_name:'非假日'}`;
+  }
+  
+  grid.innerHTML = items.map((f,i) => {
+    const pct = max > 0 ? Math.max(1, f.importance / max * 100) : 0;
+    return `<div class="fi-item">
+      <span class="fi-rank">#${i+1}</span>
+      <span class="fi-name" title="${f.feature}">${f.feature}</span>
+      <div class="fi-bar-bg"><div class="fi-bar" style="width:${pct}%;background:var(--accent)"></div></div>
+      <span class="fi-pct">${f.importance.toFixed(4)}</span>
+    </div>`;
+  }).join('');
+  document.getElementById('fi-shap-note').textContent = weatherNote;
+  document.getElementById('fi-note').textContent = `[${d}] 当日 SHAP 贡献（绝对值均值）`;
+}
+
+function renderFI() {
+  renderGlobalFI();
 }
 
 // ==================== ERROR TABLE ====================
