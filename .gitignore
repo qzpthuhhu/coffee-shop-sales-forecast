@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Model files (large binaries)
+models/
+*.pkl
+*.joblib
+
+# Data archives (keep source CSVs only)
+*.zip
+
+# Temp files
+_tmp_*
+*.ndjson
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Large data files (use Kaggle CLI to download)
+recruit-restaurant/hpg_reserve.csv

@@ -1,0 +1,453 @@
+"""
+Coffee Shop Sales Prediction Pipeline
+======================================
+Global HistGradientBoosting + GradientBoosting Ensemble + SHAP Explainability
+
+架构：Global Single Model（跨门店、SKU 共享）
+- 主力模型：HistGradientBoostingRegressor（类 LightGBM，纯 sklearn，无需 libomp）
+- 集成提升：GradientBoostingRegressor 加权融合
+- 可解释性：TreeSHAP + 大模型根因分析
+"""
+import pandas as pd
+import numpy as np
+import shap
+import joblib
+import warnings
+from pathlib import Path
+from sklearn.ensemble import HistGradientBoostingRegressor, GradientBoostingRegressor
+from sklearn.model_selection import TimeSeriesSplit
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+
+warnings.filterwarnings('ignore')
+
+# ============================================================
+# 配置
+# ============================================================
+DATA_DIR = Path(__file__).parent
+SALES_FILE = DATA_DIR / "Coffee Shop Sales.xlsx"
+WEATHER_FILE = DATA_DIR / "nyc_weather_2023_h1.csv"
+MODEL_DIR = DATA_DIR / "models"
+PREDICTION_LOOKAHEAD = 7
+
+# ============================================================
+# 1. 数据加载与预处理
+# ============================================================
+def load_and_preprocess():
+    """加载销售和天气数据，聚合为门店 x SKU x 日 粒度"""
+    print("=" * 60)
+    print("1. 加载数据与特征工程")
+    print("=" * 60)
+
+    sales = pd.read_excel(SALES_FILE)
+    sales['date'] = pd.to_datetime(sales['transaction_date'])
+    weather = pd.read_csv(WEATHER_FILE, parse_dates=['date'])
+
+    store_map = {3: 'Lower Manhattan', 5: "Hell's Kitchen", 8: 'Astoria'}
+
+    # 按 门店 x SKU x 日 聚合
+    df = sales.groupby(['date', 'store_id', 'product_id']).agg(
+        qty=('transaction_qty', 'sum'),
+        price=('unit_price', 'mean'),
+        category=('product_category', 'first'),
+        product_type=('product_type', 'first'),
+    ).reset_index()
+    df['store_name'] = df['store_id'].map(store_map)
+
+    # 构建完整时间面板
+    dates = pd.date_range(df['date'].min(), df['date'].max(), freq='D')
+    stores = df['store_id'].unique()
+    skus = df['product_id'].unique()
+
+    full_index = pd.MultiIndex.from_product(
+        [dates, stores, skus], names=['date', 'store_id', 'product_id']
+    )
+    df_full = pd.DataFrame(index=full_index).reset_index()
+    df_full['date'] = pd.to_datetime(df_full['date'])
+
+    df = df_full.merge(df, on=['date', 'store_id', 'product_id'], how='left')
+    df['qty'] = df['qty'].fillna(0).astype(int)
+    df['store_name'] = df['store_name'].fillna(df['store_id'].map(store_map))
+    df['price'] = df['price'].fillna(df.groupby('product_id')['price'].transform('mean'))
+    df['price'] = df['price'].fillna(df['price'].mean())
+    df['category'] = df['category'].fillna(df.groupby('product_id')['category'].transform('first'))
+    df['product_type'] = df['product_type'].fillna(df.groupby('product_id')['product_type'].transform('first'))
+
+    print(f"  聚合后数据: {len(df):,} 行 ({df['date'].nunique()} 天 x {df['store_id'].nunique()} 店 x {df['product_id'].nunique()} SKU)")
+
+    # --- 特征工程 ---
+    df = df.sort_values(['store_id', 'product_id', 'date']).reset_index(drop=True)
+
+    # 第一梯队：时序核心
+    print("  构造时序特征...")
+    for lag in [1, 2, 3, 7, 14]:
+        df[f'qty_lag_{lag}'] = df.groupby(['store_id', 'product_id'])['qty'].shift(lag)
+
+    for w in [7, 14, 30]:
+        grp = df.groupby(['store_id', 'product_id'])['qty']
+        df[f'qty_roll_mean_{w}d'] = grp.transform(lambda x: x.shift(1).rolling(w, min_periods=1).mean())
+        df[f'qty_roll_std_{w}d'] = grp.transform(lambda x: x.shift(1).rolling(w, min_periods=1).std().fillna(0))
+
+    df['dow'] = df['date'].dt.dayofweek
+    df['qty_dow_avg'] = df.groupby(['store_id', 'product_id', 'dow'])['qty'].transform('mean')
+
+    store_day_total = df.groupby(['store_id', 'date'])['qty'].transform('sum')
+    df['sku_share'] = df['qty'] / store_day_total.replace(0, np.nan)
+    df['sku_share'] = df['sku_share'].fillna(0)
+
+    # 第二梯队：日历（含节假日增强）
+    df['day_of_week'] = df['date'].dt.dayofweek
+    df['is_weekend'] = (df['day_of_week'] >= 5).astype(int)
+    df['month'] = df['date'].dt.month
+    df['day_of_month'] = df['date'].dt.day
+    df['week_of_month'] = ((df['date'].dt.day - 1) // 7 + 1).astype(int)
+    df['is_month_start'] = df['date'].dt.is_month_start.astype(int)
+    df['is_month_end'] = df['date'].dt.is_month_end.astype(int)
+
+    # 季节编码
+    season_map = {'winter': 0, 'spring': 1, 'summer': 2, 'fall': 3}
+    def get_season(m):
+        if m in [12, 1, 2]: return 'winter'
+        elif m in [3, 4, 5]: return 'spring'
+        elif m in [6, 7, 8]: return 'summer'
+        else: return 'fall'
+    df['season_code'] = df['date'].dt.month.apply(get_season).map(season_map)
+
+    # 季中第几周
+    season_start_month = {'winter': 1, 'spring': 4, 'summer': 7, 'fall': 10}
+    df['week_of_season'] = df.apply(
+        lambda r: (r['date'] - pd.Timestamp(year=r['date'].year,
+                   month=season_start_month[get_season(r['date'].month)], day=1)).days // 7 + 1,
+        axis=1)
+
+    # 第三梯队：天气（含增强节假日）
+    weather_cols = [
+        'temperature_2m_max', 'temperature_2m_min', 'temperature_2m_mean',
+        'precipitation_sum', 'is_rain', 'is_snow', 'is_clear',
+        'sunshine_duration', 'wind_speed_10m_max', 'relative_humidity_2m_mean',
+        'is_holiday_detailed', 'is_pre_holiday_1d', 'is_pre_holiday_3d',
+        'is_post_holiday_1d', 'is_long_weekend'
+    ]
+    df = df.merge(weather[['date'] + weather_cols], on='date', how='left')
+
+    # 假日影响力编码（高=2, 中=1, 无=0）
+    impact_map = {'high': 2, 'medium': 1, 'none': 0}
+    df_weather_full = pd.read_csv(WEATHER_FILE, parse_dates=['date'])
+    df = df.merge(df_weather_full[['date', 'holiday_impact']], on='date', how='left')
+    df['holiday_impact_code'] = df['holiday_impact'].map(impact_map).fillna(0).astype(int)
+
+    df['temp_range'] = df['temperature_2m_max'] - df['temperature_2m_min']
+    df['is_hot'] = (df['temperature_2m_max'] > 25).astype(int)
+    df['is_cold'] = (df['temperature_2m_max'] < 5).astype(int)
+
+    # 第四梯队：价格
+    cat_avg_price = df.groupby('category')['price'].transform('mean')
+    df['price_vs_category_avg'] = df['price'] / cat_avg_price.replace(0, 1)
+    df['price'] = df['price'].fillna(df['price'].median())
+
+    print(f"  特征矩阵: {df.shape[1]} 列")
+    return df
+
+
+def get_feature_cols(df):
+    exclude = ['date', 'store_id', 'store_name', 'product_id', 'category',
+               'product_type', 'qty', 'dow', 'holiday_impact',
+               'season_spring', 'season_summer', 'season_winter']
+    return [c for c in df.columns if c not in exclude]
+
+
+# ============================================================
+# 2. 训练/测试切分
+# ============================================================
+def prepare_train_test(df):
+    print("\n" + "=" * 60)
+    print("2. 训练/测试切分")
+    print("=" * 60)
+    dates = sorted(df['date'].unique())
+    test_start = dates[-PREDICTION_LOOKAHEAD]
+    train = df[df['date'] < test_start].copy()
+    test = df[df['date'] >= test_start].copy()
+    print(f"  训练集: {train['date'].min().date()} ~ {train['date'].max().date()} ({len(train):,} 行)")
+    print(f"  测试集: {test['date'].min().date()} ~ {test['date'].max().date()} ({len(test):,} 行)")
+    return train, test
+
+
+# ============================================================
+# 3. TimeSeriesSplit CV
+# ============================================================
+def time_series_cv(df, feature_cols, n_splits=3):
+    print("\n" + "=" * 60)
+    print("3. TimeSeriesSplit 交叉验证")
+    print("=" * 60)
+    dates = sorted(df['date'].unique())
+    tscv = TimeSeriesSplit(n_splits=n_splits)
+    scores = []
+
+    for fold, (train_idx, val_idx) in enumerate(tscv.split(dates)):
+        train_dates = [dates[i] for i in train_idx]
+        val_dates = [dates[i] for i in val_idx]
+        train_data = df[df['date'].isin(train_dates)].dropna(subset=feature_cols + ['qty'])
+        val_data = df[df['date'].isin(val_dates)].dropna(subset=feature_cols + ['qty'])
+
+        model = HistGradientBoostingRegressor(
+            max_iter=300, max_depth=10, learning_rate=0.05,
+            min_samples_leaf=20, random_state=42, early_stopping=True,
+            validation_fraction=0.1, n_iter_no_change=20
+        )
+        model.fit(train_data[feature_cols], train_data['qty'])
+        y_pred = model.predict(val_data[feature_cols])
+        mae = mean_absolute_error(val_data['qty'], y_pred)
+        scores.append(mae)
+        print(f"  Fold {fold+1}: {val_dates[0].date()} ~ {val_dates[-1].date()}, MAE={mae:.4f}")
+
+    print(f"\n  CV MAE: {np.mean(scores):.4f} ± {np.std(scores):.4f}")
+    return scores
+
+
+# ============================================================
+# 4. 模型训练
+# ============================================================
+def train_hist_gb(X_train, y_train, X_val, y_val):
+    """主力模型：HistGradientBoosting（类 LightGBM）"""
+    print("\n" + "=" * 60)
+    print("4. HistGradientBoosting 训练（= LightGBM 等价实现）")
+    print("=" * 60)
+
+    model = HistGradientBoostingRegressor(
+        max_iter=500,
+        max_depth=12,
+        learning_rate=0.05,
+        min_samples_leaf=15,
+        max_leaf_nodes=127,
+        l2_regularization=0.01,
+        random_state=42,
+        early_stopping=True,
+        validation_fraction=0.1,
+        n_iter_no_change=30,
+        verbose=0,
+    )
+    model.fit(X_train, y_train)
+
+    y_pred = model.predict(X_val)
+    mae = mean_absolute_error(y_val, y_pred)
+    rmse = np.sqrt(mean_squared_error(y_val, y_pred))
+    r2 = r2_score(y_val, y_pred)
+    print(f"  HGB 验证集: MAE={mae:.4f}, RMSE={rmse:.4f}, R²={r2:.4f}")
+    return model
+
+
+def train_gb(X_train, y_train, X_val, y_val):
+    """辅助模型：GradientBoosting（类 XGBoost）"""
+    print("\n" + "=" * 60)
+    print("5. GradientBoosting 训练（= XGBoost 等价实现）")
+    print("=" * 60)
+
+    model = GradientBoostingRegressor(
+        n_estimators=500,
+        max_depth=8,
+        learning_rate=0.05,
+        subsample=0.8,
+        min_samples_leaf=15,
+        random_state=42,
+        validation_fraction=0.1,
+        n_iter_no_change=30,
+        verbose=0,
+    )
+    model.fit(X_train, y_train)
+
+    y_pred = model.predict(X_val)
+    mae = mean_absolute_error(y_val, y_pred)
+    rmse = np.sqrt(mean_squared_error(y_val, y_pred))
+    r2 = r2_score(y_val, y_pred)
+    print(f"  GB 验证集: MAE={mae:.4f}, RMSE={rmse:.4f}, R²={r2:.4f}")
+    return model
+
+
+# ============================================================
+# 5. SHAP 可解释性
+# ============================================================
+def shap_explain(model, X_sample, feature_cols):
+    print("\n" + "=" * 60)
+    print("6. SHAP 可解释性分析")
+    print("=" * 60)
+
+    print("  计算 TreeSHAP (sampled)...")
+    explainer = shap.TreeExplainer(model, X_sample.iloc[:500])
+    shap_values = explainer.shap_values(X_sample.iloc[:500])
+
+    importance = np.abs(shap_values).mean(axis=0)
+    feat_imp = pd.DataFrame({
+        'feature': feature_cols,
+        'shap_importance': importance
+    }).sort_values('shap_importance', ascending=False)
+
+    print("\n  Top 20 特征重要性 (SHAP):")
+    for i, (_, row) in enumerate(feat_imp.head(20).iterrows()):
+        print(f"  {i+1:2d}. {row['feature']:<30s} {row['shap_importance']:.6f}")
+
+    return feat_imp, shap_values, explainer
+
+
+# ============================================================
+# 6. 预测与评估
+# ============================================================
+def predict_and_report(hgb_model, gb_model, test_df, feature_cols):
+    print("\n" + "=" * 60)
+    print("7. 最终预测")
+    print("=" * 60)
+
+    X_test = test_df[feature_cols].dropna()
+    y_test = test_df.loc[X_test.index, 'qty']
+
+    pred_hgb = hgb_model.predict(X_test)
+    pred_gb = gb_model.predict(X_test)
+    pred_ens = 0.6 * pred_hgb + 0.4 * pred_gb  # 加权融合
+
+    for name, pred in [('HistGB', pred_hgb), ('GradBoost', pred_gb), ('Ensemble', pred_ens)]:
+        mae = mean_absolute_error(y_test, pred)
+        rmse = np.sqrt(mean_squared_error(y_test, pred))
+        r2 = r2_score(y_test, pred)
+        print(f"  {name:12s}: MAE={mae:.4f}, RMSE={rmse:.4f}, R²={r2:.4f}")
+
+    errors = y_test - pred_ens
+    within_10pct = (np.abs(errors / (y_test + 1)) < 0.10).mean()
+    within_20pct = (np.abs(errors / (y_test + 1)) < 0.20).mean()
+    print(f"\n  预测误差在 ±10% 以内的比例: {within_10pct:.1%}")
+    print(f"  预测误差在 ±20% 以内的比例: {within_20pct:.1%}")
+
+    # 保存详细结果
+    result_df = test_df.loc[X_test.index].copy()
+    result_df['pred_hgb'] = pred_hgb
+    result_df['pred_gb'] = pred_gb
+    result_df['pred_ensemble'] = pred_ens
+    result_df['error'] = errors
+    result_df['error_pct'] = np.abs(errors / (result_df['qty'] + 1))
+
+    # 按日聚合
+    daily = result_df.groupby('date').agg(
+        actual=('qty', 'sum'), predicted=('pred_ensemble', 'sum'),
+        error=('error', 'sum')
+    ).reset_index()
+    daily['error_pct'] = np.abs(daily['error'] / daily['actual'])
+
+    print(f"\n  每日总销量预测 (测试集 {len(daily)} 天):")
+    for _, row in daily.iterrows():
+        flag = "  ***" if row['error_pct'] > 0.15 else ""
+        print(f"  {row['date'].date()}  实际={row['actual']:.0f}  预测={row['predicted']:.0f}  "
+              f"偏差={row['error_pct']:.1%}{flag}")
+
+    return result_df, daily
+
+
+# ============================================================
+# 7. LLM 根因分析
+# ============================================================
+def llm_root_cause_analysis(result_df, feat_imp):
+    print("\n" + "=" * 60)
+    print("8. 根因分析")
+    print("=" * 60)
+
+    result_df = result_df.sort_values('error_pct', ascending=False)
+    top_errors = result_df.head(5)
+
+    print("\n  预测偏差最大的 5 个样本:")
+    for _, row in top_errors.iterrows():
+        print(f"  {row['date'].date()} | {row['store_name']} | SKU={row['product_id']} | "
+              f"实际={row['qty']:.0f} | 预测={row['pred_ensemble']:.1f} | 偏差={row['error_pct']:.1%}")
+
+    top_features = feat_imp.head(10).to_dict('records')
+    lines = [
+        "你是茶饮行业销量预测分析专家。请分析以下咖啡门店销量预测结果。",
+        "",
+        "## 背景",
+        "- 3 家纽约门店，181 天数据，80 个 SKU",
+        "- 模型: HistGradientBoosting + GradientBoosting Ensemble",
+        "- 特征: 时序 lag、滚动统计、天气、日历、价格",
+        "",
+        "## Top 10 特征重要性 (SHAP)",
+    ]
+    for f in top_features:
+        lines.append(f"- {f['feature']}: {f['shap_importance']:.6f}")
+
+    lines += ["", "## 预测偏差最大的样本", "| 日期 | 门店 | SKU | 实际 | 预测 | 偏差率 |",
+              "|------|------|-----|------|------|--------|"]
+    for _, row in top_errors.iterrows():
+        lines.append(f"| {row['date'].date()} | {row['store_name']} | {row['product_id']} "
+                     f"| {row['qty']:.0f} | {row['pred_ensemble']:.1f} | {row['error_pct']:.1%} |")
+
+    lines += ["", "## 请分析",
+              "1. 哪些关键特征驱动了这些预测偏差？",
+              "2. 是否存在天气、节假日、价格变动等因素的异常影响？",
+              "3. 模型改进建议（特征、算法、数据清洗）。",
+              "4. 如果这是茶饮连锁（如柠季），这种预测精度对订货和排班够不够用？"]
+
+    prompt = "\n".join(lines)
+    print(f"\n  根因分析提示词已生成 ({len(prompt)} 字符)")
+    print("  " + "-" * 50)
+    print(prompt)
+
+    with open(DATA_DIR / "root_cause_prompt.txt", "w") as f:
+        f.write(prompt)
+
+    return prompt
+
+
+# ============================================================
+# Main Pipeline
+# ============================================================
+def run_pipeline():
+    print("\n" + "=" * 60)
+    print("Coffee Shop Sales 销量预测 Pipeline")
+    print("HistGradientBoosting + GradientBoosting Ensemble + SHAP")
+    print("=" * 60)
+
+    # 1. 数据加载 & 特征工程
+    df = load_and_preprocess()
+
+    # 2. 切分
+    train, test = prepare_train_test(df)
+    feature_cols = get_feature_cols(df)
+
+    # 3. CV
+    time_series_cv(df, feature_cols, n_splits=3)
+
+    # 4. 训练数据
+    X_train = train.dropna(subset=feature_cols + ['qty'])[feature_cols]
+    y_train = train.loc[X_train.index, 'qty']
+    X_val = test.dropna(subset=feature_cols + ['qty'])[feature_cols]
+    y_val = test.loc[X_val.index, 'qty']
+
+    # 5. 训练
+    hgb_model = train_hist_gb(X_train, y_train, X_val, y_val)
+    gb_model = train_gb(X_train, y_train, X_val, y_val)
+
+    # 6. 预测
+    result_df, daily_result = predict_and_report(hgb_model, gb_model, test, feature_cols)
+
+    # 7. SHAP
+    X_sample = X_train.sample(min(2000, len(X_train)), random_state=42)
+    try:
+        feat_imp, shap_values, explainer = shap_explain(hgb_model, X_sample, feature_cols)
+    except Exception as e:
+        print(f"\n  SHAP 计算跳过（样本过大）: {e}")
+        feat_imp = pd.DataFrame({
+            'feature': feature_cols,
+            'shap_importance': [0] * len(feature_cols)
+        })
+
+    # 8. 根因分析
+    llm_root_cause_analysis(result_df, feat_imp)
+
+    # 9. 保存
+    MODEL_DIR.mkdir(exist_ok=True)
+    joblib.dump(hgb_model, MODEL_DIR / "hgb_model.pkl")
+    joblib.dump(gb_model, MODEL_DIR / "gb_model.pkl")
+    feat_imp.to_csv(MODEL_DIR / "shap_importance.csv", index=False)
+    result_df.to_csv(MODEL_DIR / "test_predictions.csv", index=False)
+    daily_result.to_csv(MODEL_DIR / "daily_predictions.csv", index=False)
+
+    print(f"\n模型和结果已保存到 {MODEL_DIR}/")
+    return hgb_model, gb_model, result_df, feat_imp
+
+
+if __name__ == "__main__":
+    run_pipeline()
