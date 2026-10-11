@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="data:,">
 <title>Coffee Shop SKU 销量预测验证台</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
@@ -13,7 +14,7 @@
   --warn: #f59e0b; --coffee: #8B5E3C; --tea: #4ade80; --bakery: #fbbf24;
 }
 * { margin:0; padding:0; box-sizing:border-box; }
-body { background:var(--bg); color:var(--text); font-family:-apple-system,system-ui,sans-serif; line-height:1.6; }
+body { background:var(--bg); color:var(--text); font-family:-apple-system,system-ui,sans-serif; line-height:1.6; overflow-x:hidden; }
 .container { max-width:1280px; margin:0 auto; padding:0 24px; }
 
 /* Hero */
@@ -47,12 +48,12 @@ body { background:var(--bg); color:var(--text); font-family:-apple-system,system
 
 /* Feature grid */
 .fi-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:12px; }
-.fi-item { background:#252836; border-radius:8px; padding:12px 16px; display:flex; align-items:center; gap:12px; }
+.fi-item { background:#252836; border-radius:8px; padding:12px 16px; display:flex; align-items:center; gap:12px; min-width:0; }
 .fi-rank { font-size:0.75rem; color:var(--text2); min-width:24px; }
 .fi-bar-bg { flex:1; height:8px; background:#393c4f; border-radius:4px; overflow:hidden; }
 .fi-bar { height:100%; border-radius:4px; background:var(--accent); }
 .fi-pct { font-size:0.8rem; color:var(--text2); min-width:50px; text-align:right; }
-.fi-name { font-size:0.85rem; flex:1; }
+.fi-name { font-size:0.85rem; flex:1; min-width:0; overflow-wrap:anywhere; }
 
 /* Chat */
 .chat-log { max-height:380px; overflow-y:auto; margin-bottom:16px; display:flex; flex-direction:column; gap:12px; }
@@ -83,6 +84,7 @@ body { background:var(--bg); color:var(--text); font-family:-apple-system,system
 
 pre { background:#252836; padding:16px; border-radius:8px; overflow-x:auto; font-size:0.85rem; }
 code { font-size:0.85rem; background:#252836; padding:2px 6px; border-radius:4px; }
+#method-content { max-width:100%; overflow-x:auto; }
 
 .error-banner { background:#451a1a; border:1px solid var(--err); border-radius:8px; padding:12px 16px; color:#fca5a5; font-size:0.85rem; margin:12px 0; }
 </style>
@@ -311,9 +313,9 @@ function renderMethod() {
   const metadata = DATA.metadata;
   const metrics = DATA.metrics;
   const content = `
-### 整体架构：Global HistGradientBoosting + GradientBoosting 加权融合
+### 整体架构：Global LightGBM
 
-当前实现使用 sklearn 的两个全局树模型处理所有门店和 SKU。它不是 LightGBM；迁移到真实 LightGBM 前，页面不会使用 LightGBM 名称。
+当前实现使用官方 lightgbm 包的 LGBMRegressor，以一个全局模型处理所有门店和 SKU。
 
 #### 特征工程（44 个特征，五梯队）
 

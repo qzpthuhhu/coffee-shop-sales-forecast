@@ -1,11 +1,10 @@
 """
 Coffee Shop Sales Prediction Pipeline
 ======================================
-Global HistGradientBoosting + GradientBoosting Ensemble + SHAP Explainability
+Global LightGBM + SHAP Explainability
 
 架构：Global Single Model（跨门店、SKU 共享）
-- 主力模型：HistGradientBoostingRegressor（类 LightGBM，纯 sklearn，无需 libomp）
-- 集成提升：GradientBoostingRegressor 加权融合
+- 主力模型：lightgbm.LGBMRegressor
 - 可解释性：TreeSHAP + 大模型根因分析
 """
 import pandas as pd
@@ -14,7 +13,7 @@ import shap
 import joblib
 import warnings
 from pathlib import Path
-from sklearn.ensemble import HistGradientBoostingRegressor, GradientBoostingRegressor
+from lightgbm import LGBMRegressor, early_stopping, log_evaluation
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
@@ -30,6 +29,22 @@ MODEL_DIR = DATA_DIR / "models"
 PREDICTION_LOOKAHEAD = 7
 HISTORY_LAGS = [1, 2, 3, 7, 14, 28]
 HISTORY_WINDOWS = [7, 14, 28]
+LIGHTGBM_PARAMS = {
+    'objective': 'regression_l1',
+    'n_estimators': 1000,
+    'learning_rate': 0.03,
+    'num_leaves': 63,
+    'max_depth': -1,
+    'min_child_samples': 20,
+    'subsample': 0.9,
+    'subsample_freq': 1,
+    'colsample_bytree': 0.9,
+    'reg_alpha': 0.05,
+    'reg_lambda': 0.1,
+    'random_state': 42,
+    'n_jobs': 1,
+    'verbosity': -1,
+}
 
 
 def add_history_features(df):
@@ -209,12 +224,15 @@ def time_series_cv(df, feature_cols, n_splits=3):
         train_data = df[df['date'].isin(train_dates)].dropna(subset=feature_cols + ['qty'])
         val_data = df[df['date'].isin(val_dates)].dropna(subset=feature_cols + ['qty'])
 
-        model = HistGradientBoostingRegressor(
-            max_iter=300, max_depth=10, learning_rate=0.05,
-            min_samples_leaf=20, random_state=42, early_stopping=True,
-            validation_fraction=0.1, n_iter_no_change=20
+        model = LGBMRegressor(**LIGHTGBM_PARAMS)
+        model.fit(
+            train_data[feature_cols],
+            train_data['qty'],
+            eval_X=val_data[feature_cols],
+            eval_y=val_data['qty'],
+            eval_metric='mae',
+            callbacks=[early_stopping(50, verbose=False), log_evaluation(0)],
         )
-        model.fit(train_data[feature_cols], train_data['qty'])
         y_pred = model.predict(val_data[feature_cols])
         mae = mean_absolute_error(val_data['qty'], y_pred)
         scores.append(mae)
@@ -227,59 +245,30 @@ def time_series_cv(df, feature_cols, n_splits=3):
 # ============================================================
 # 4. 模型训练
 # ============================================================
-def train_hist_gb(X_train, y_train, X_val, y_val):
-    """主力模型：HistGradientBoosting（类 LightGBM）"""
+def train_lightgbm(X_train, y_train, X_val, y_val):
+    """Train the single global LightGBM model with holdout early stopping."""
     print("\n" + "=" * 60)
-    print("4. HistGradientBoosting 训练（= LightGBM 等价实现）")
+    print("4. Global LightGBM 训练")
     print("=" * 60)
 
-    model = HistGradientBoostingRegressor(
-        max_iter=500,
-        max_depth=12,
-        learning_rate=0.05,
-        min_samples_leaf=15,
-        max_leaf_nodes=127,
-        l2_regularization=0.01,
-        random_state=42,
-        early_stopping=True,
-        validation_fraction=0.1,
-        n_iter_no_change=30,
-        verbose=0,
+    model = LGBMRegressor(**LIGHTGBM_PARAMS)
+    model.fit(
+        X_train,
+        y_train,
+        eval_X=X_val,
+        eval_y=y_val,
+        eval_metric='mae',
+        callbacks=[early_stopping(50, verbose=False), log_evaluation(0)],
     )
-    model.fit(X_train, y_train)
 
     y_pred = model.predict(X_val)
     mae = mean_absolute_error(y_val, y_pred)
     rmse = np.sqrt(mean_squared_error(y_val, y_pred))
     r2 = r2_score(y_val, y_pred)
-    print(f"  HGB 验证集: MAE={mae:.4f}, RMSE={rmse:.4f}, R²={r2:.4f}")
-    return model
-
-
-def train_gb(X_train, y_train, X_val, y_val):
-    """辅助模型：GradientBoosting（类 XGBoost）"""
-    print("\n" + "=" * 60)
-    print("5. GradientBoosting 训练（= XGBoost 等价实现）")
-    print("=" * 60)
-
-    model = GradientBoostingRegressor(
-        n_estimators=500,
-        max_depth=8,
-        learning_rate=0.05,
-        subsample=0.8,
-        min_samples_leaf=15,
-        random_state=42,
-        validation_fraction=0.1,
-        n_iter_no_change=30,
-        verbose=0,
+    print(
+        f"  LightGBM 验证集: MAE={mae:.4f}, RMSE={rmse:.4f}, "
+        f"R²={r2:.4f}, best_iteration={model.best_iteration_}"
     )
-    model.fit(X_train, y_train)
-
-    y_pred = model.predict(X_val)
-    mae = mean_absolute_error(y_val, y_pred)
-    rmse = np.sqrt(mean_squared_error(y_val, y_pred))
-    r2 = r2_score(y_val, y_pred)
-    print(f"  GB 验证集: MAE={mae:.4f}, RMSE={rmse:.4f}, R²={r2:.4f}")
     return model
 
 
@@ -320,25 +309,21 @@ def shap_explain(model, X_sample, feature_cols):
 # ============================================================
 # 6. 预测与评估
 # ============================================================
-def predict_and_report(hgb_model, gb_model, test_df, feature_cols):
+def predict_and_report(model, test_df, feature_cols):
     print("\n" + "=" * 60)
-    print("7. 最终预测")
+    print("6. 最终预测")
     print("=" * 60)
 
     X_test = test_df[feature_cols].dropna()
     y_test = test_df.loc[X_test.index, 'qty']
 
-    pred_hgb = hgb_model.predict(X_test)
-    pred_gb = gb_model.predict(X_test)
-    pred_ens = 0.6 * pred_hgb + 0.4 * pred_gb  # 加权融合
+    predictions = model.predict(X_test)
+    mae = mean_absolute_error(y_test, predictions)
+    rmse = np.sqrt(mean_squared_error(y_test, predictions))
+    r2 = r2_score(y_test, predictions)
+    print(f"  LightGBM: MAE={mae:.4f}, RMSE={rmse:.4f}, R²={r2:.4f}")
 
-    for name, pred in [('HistGB', pred_hgb), ('GradBoost', pred_gb), ('Ensemble', pred_ens)]:
-        mae = mean_absolute_error(y_test, pred)
-        rmse = np.sqrt(mean_squared_error(y_test, pred))
-        r2 = r2_score(y_test, pred)
-        print(f"  {name:12s}: MAE={mae:.4f}, RMSE={rmse:.4f}, R²={r2:.4f}")
-
-    errors = y_test - pred_ens
+    errors = y_test - predictions
     within_10pct = (np.abs(errors / (y_test + 1)) < 0.10).mean()
     within_20pct = (np.abs(errors / (y_test + 1)) < 0.20).mean()
     print(f"\n  预测误差在 ±10% 以内的比例: {within_10pct:.1%}")
@@ -346,15 +331,13 @@ def predict_and_report(hgb_model, gb_model, test_df, feature_cols):
 
     # 保存详细结果
     result_df = test_df.loc[X_test.index].copy()
-    result_df['pred_hgb'] = pred_hgb
-    result_df['pred_gb'] = pred_gb
-    result_df['pred_ensemble'] = pred_ens
+    result_df['pred_lightgbm'] = predictions
     result_df['error'] = errors
     result_df['error_pct'] = np.abs(errors / (result_df['qty'] + 1))
 
     # 按日聚合
     daily = result_df.groupby('date').agg(
-        actual=('qty', 'sum'), predicted=('pred_ensemble', 'sum'),
+        actual=('qty', 'sum'), predicted=('pred_lightgbm', 'sum'),
         error=('error', 'sum')
     ).reset_index()
     daily['error_pct'] = np.abs(daily['error'] / daily['actual'])
@@ -382,7 +365,7 @@ def llm_root_cause_analysis(result_df, feat_imp):
     print("\n  预测偏差最大的 5 个样本:")
     for _, row in top_errors.iterrows():
         print(f"  {row['date'].date()} | {row['store_name']} | SKU={row['product_id']} | "
-              f"实际={row['qty']:.0f} | 预测={row['pred_ensemble']:.1f} | 偏差={row['error_pct']:.1%}")
+              f"实际={row['qty']:.0f} | 预测={row['pred_lightgbm']:.1f} | 偏差={row['error_pct']:.1%}")
 
     top_features = feat_imp.head(10).to_dict('records')
     lines = [
@@ -390,8 +373,10 @@ def llm_root_cause_analysis(result_df, feat_imp):
         "",
         "## 背景",
         "- 3 家纽约门店，181 天数据，80 个 SKU",
-        "- 模型: HistGradientBoosting + GradientBoosting Ensemble",
+        "- 模型: Global LightGBM (lightgbm.LGBMRegressor)",
         "- 特征: 时序 lag、滚动统计、天气、日历、价格",
+        "- 当前 SHAP 仅为全局平均绝对贡献，不含单条预测的方向",
+        "- 禁止把全局 SHAP、天气相关性或业务假设表述为单条预测的确定性因果根因",
         "",
         "## Top 10 特征重要性 (SHAP)",
     ]
@@ -402,11 +387,11 @@ def llm_root_cause_analysis(result_df, feat_imp):
               "|------|------|-----|------|------|--------|"]
     for _, row in top_errors.iterrows():
         lines.append(f"| {row['date'].date()} | {row['store_name']} | {row['product_id']} "
-                     f"| {row['qty']:.0f} | {row['pred_ensemble']:.1f} | {row['error_pct']:.1%} |")
+                     f"| {row['qty']:.0f} | {row['pred_lightgbm']:.1f} | {row['error_pct']:.1%} |")
 
     lines += ["", "## 请分析",
-              "1. 哪些关键特征驱动了这些预测偏差？",
-              "2. 是否存在天气、节假日、价格变动等因素的异常影响？",
+              "1. 全局模型主要依赖哪些特征？不要据此断言单条预测根因。",
+              "2. 哪些异常需要逐预测带符号 SHAP 或额外业务数据才能解释？",
               "3. 模型改进建议（特征、算法、数据清洗）。",
               "4. 如果这是茶饮连锁（如柠季），这种预测精度对订货和排班够不够用？"]
 
@@ -427,7 +412,7 @@ def llm_root_cause_analysis(result_df, feat_imp):
 def run_pipeline():
     print("\n" + "=" * 60)
     print("Coffee Shop Sales 销量预测 Pipeline")
-    print("HistGradientBoosting + GradientBoosting Ensemble + SHAP")
+    print("Global LightGBM + SHAP")
     print("=" * 60)
 
     # 1. 数据加载 & 特征工程
@@ -447,29 +432,27 @@ def run_pipeline():
     y_val = test.loc[X_val.index, 'qty']
 
     # 5. 训练
-    hgb_model = train_hist_gb(X_train, y_train, X_val, y_val)
-    gb_model = train_gb(X_train, y_train, X_val, y_val)
+    model = train_lightgbm(X_train, y_train, X_val, y_val)
 
     # 6. 预测
-    result_df, daily_result = predict_and_report(hgb_model, gb_model, test, feature_cols)
+    result_df, daily_result = predict_and_report(model, test, feature_cols)
 
     # 7. SHAP
     X_sample = X_train.sample(min(2000, len(X_train)), random_state=42)
-    feat_imp, shap_values, explainer = shap_explain(hgb_model, X_sample, feature_cols)
+    feat_imp, shap_values, explainer = shap_explain(model, X_sample, feature_cols)
 
     # 8. 根因分析
     llm_root_cause_analysis(result_df, feat_imp)
 
     # 9. 保存
     MODEL_DIR.mkdir(exist_ok=True)
-    joblib.dump(hgb_model, MODEL_DIR / "hgb_model.pkl")
-    joblib.dump(gb_model, MODEL_DIR / "gb_model.pkl")
+    joblib.dump(model, MODEL_DIR / "lightgbm_model.pkl")
     feat_imp.to_csv(MODEL_DIR / "shap_importance.csv", index=False)
     result_df.to_csv(MODEL_DIR / "test_predictions.csv", index=False)
     daily_result.to_csv(MODEL_DIR / "daily_predictions.csv", index=False)
 
     print(f"\n模型和结果已保存到 {MODEL_DIR}/")
-    return hgb_model, gb_model, result_df, feat_imp
+    return model, result_df, feat_imp
 
 
 if __name__ == "__main__":

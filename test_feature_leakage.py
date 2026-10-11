@@ -3,9 +3,14 @@ import unittest
 import numpy as np
 import pandas as pd
 from pandas.testing import assert_series_equal
-from sklearn.ensemble import HistGradientBoostingRegressor
+from lightgbm import LGBMRegressor
 
-from predict_pipeline import add_history_features, shap_explain
+from predict_pipeline import (
+    LIGHTGBM_PARAMS,
+    add_history_features,
+    shap_explain,
+    train_lightgbm,
+)
 
 
 def make_panel(days=42):
@@ -112,10 +117,13 @@ class HistoryFeatureLeakageTest(unittest.TestCase):
             'weather': random.normal(size=200),
         })
         target = 4 + 2 * features['history'] - features['weather']
-        model = HistGradientBoostingRegressor(
-            max_iter=50,
-            max_depth=3,
-            random_state=42,
+        model = LGBMRegressor(
+            **{
+                **LIGHTGBM_PARAMS,
+                'n_estimators': 50,
+                'max_depth': 3,
+                'num_leaves': 7,
+            },
         ).fit(features, target)
 
         importance, shap_values, explainer = shap_explain(
@@ -130,6 +138,24 @@ class HistoryFeatureLeakageTest(unittest.TestCase):
             model.predict(features.head(40)),
             atol=1e-6,
         )
+
+    def test_training_returns_real_lightgbm_model(self):
+        random = np.random.default_rng(7)
+        features = pd.DataFrame({
+            'history': random.normal(size=240),
+            'weather': random.normal(size=240),
+        })
+        target = 8 + 1.5 * features['history'] - 0.5 * features['weather']
+        model = train_lightgbm(
+            features.iloc[:200],
+            target.iloc[:200],
+            features.iloc[200:],
+            target.iloc[200:],
+        )
+
+        self.assertIsInstance(model, LGBMRegressor)
+        self.assertEqual(model.booster_.params['objective'], 'regression_l1')
+        self.assertGreater(model.best_iteration_, 0)
 
 
 if __name__ == '__main__':

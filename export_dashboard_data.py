@@ -12,7 +12,7 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 ROOT = Path(__file__).parent
 MODEL_DIR = ROOT / "models"
 OUTPUT_FILE = ROOT / "dashboard" / "data.json"
-PREDICTION_COLUMN = "pred_ensemble"
+PREDICTION_COLUMN = "pred_lightgbm"
 
 
 def _round(value, digits=4):
@@ -97,7 +97,7 @@ def build_dashboard_payload(predictions, daily, importance, generated_at=None):
             "type": row.product_type,
             "sku": int(row.product_id),
             "actual": _round(row.qty, 1),
-            "pred": _round(row.pred_ensemble, 1),
+            "pred": _round(row.pred_lightgbm, 1),
             "error": _round(row.error, 1),
         }
         for row in error_rows.itertuples()
@@ -122,8 +122,8 @@ def build_dashboard_payload(predictions, daily, importance, generated_at=None):
         column for column in predictions.columns
         if column not in {
             "date", "store_id", "store_name", "product_id", "category",
-            "product_type", "qty", "dow", "holiday_impact", "pred_hgb",
-            "pred_gb", "pred_ensemble", "error", "error_pct",
+            "product_type", "qty", "dow", "holiday_impact",
+            "pred_lightgbm", "error", "error_pct",
         }
     ]
     generated_at = generated_at or datetime.now(timezone.utc).isoformat()
@@ -132,7 +132,7 @@ def build_dashboard_payload(predictions, daily, importance, generated_at=None):
 
     return {
         "metadata": {
-            "model_name": "Global HistGradientBoosting + GradientBoosting ensemble",
+            "model_name": "Global LightGBM (lightgbm.LGBMRegressor)",
             "validation_start": start,
             "validation_end": end,
             "validation_days": int(predictions["date"].nunique()),

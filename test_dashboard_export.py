@@ -29,11 +29,15 @@ class DashboardExportTest(unittest.TestCase):
         self.assertEqual(metadata["validation_days"], 7)
         self.assertEqual(metadata["sample_count"], 1680)
         self.assertEqual(metadata["feature_count"], 44)
-        self.assertAlmostEqual(metrics["mae"], 2.67)
-        self.assertAlmostEqual(metrics["rmse"], 3.89)
-        self.assertAlmostEqual(metrics["r2"], 0.652)
-        self.assertAlmostEqual(metrics["within_10pct"], 11.7)
-        self.assertAlmostEqual(metrics["within_20pct"], 27.3)
+        self.assertEqual(
+            metadata["model_name"],
+            "Global LightGBM (lightgbm.LGBMRegressor)",
+        )
+        self.assertAlmostEqual(metrics["mae"], 2.6)
+        self.assertAlmostEqual(metrics["rmse"], 3.85)
+        self.assertAlmostEqual(metrics["r2"], 0.658)
+        self.assertAlmostEqual(metrics["within_10pct"], 28.1)
+        self.assertAlmostEqual(metrics["within_20pct"], 43.9)
 
     def test_snapshot_does_not_restore_leaking_feature(self):
         feature_names = {
@@ -58,7 +62,8 @@ class DashboardExportTest(unittest.TestCase):
         self.assertNotIn("apiKeyInput", html)
         self.assertNotIn("openrouter_key", html)
         self.assertNotIn("openrouter.ai", html)
-        self.assertNotIn("Global LightGBM", html)
+        self.assertIn("Global LightGBM", html)
+        self.assertNotIn("HistGradientBoosting", html)
         self.assertNotIn("0.961", html)
         self.assertNotIn("69.6%", html)
 
