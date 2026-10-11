@@ -1,0 +1,118 @@
+{
+  "manifest_version": "v1",
+  "format": "ndjson",
+  "base_token": "BiEub9FWIaxwpXszm6fcQ5tUnmd",
+  "table_id": "tblEt81NvOlje4mJ",
+  "rev": 8,
+  "timezone": "Asia/Shanghai",
+  "query_context": {
+    "field_scope": "all_fields",
+    "record_scope": "all_records"
+  },
+  "requested_limit": 2000,
+  "records_count": 9,
+  "page_count": 1,
+  "has_more": false,
+  "record_file": "/Users/bytedance/Documents/门店预测kaggle数据/tblEt81NvOlje4mJ_20261010_180531_786.ndjson",
+  "record_file_size_bytes": 1553,
+  "manifest_file": "/Users/bytedance/Documents/门店预测kaggle数据/tblEt81NvOlje4mJ_20261010_180531_786.manifest.json",
+  "columns": {
+    "ID": {
+      "field_id": "fldnV00OaR",
+      "field_type": "auto_number",
+      "physical_type": "string|null",
+      "stats": {
+        "null_count": 0,
+        "max_length": 6
+      },
+      "example": "NO.001"
+    },
+    "SKU数": {
+      "field_id": "fld9fEOL4a",
+      "field_type": "number",
+      "physical_type": "number|null",
+      "stats": {
+        "null_count": 0,
+        "min": 3,
+        "max": 21,
+        "avg": 8.88888888888889
+      },
+      "example": 3
+    },
+    "record_id": {
+      "physical_type": "string",
+      "stats": {
+        "max_length": 16
+      },
+      "example": "reczz28LczgOtHfd"
+    },
+    "产品类型数": {
+      "field_id": "fldj5kUAeV",
+      "field_type": "number",
+      "physical_type": "number|null",
+      "stats": {
+        "null_count": 0,
+        "min": 1,
+        "max": 6,
+        "avg": 3.2222222222222223
+      },
+      "example": 3
+    },
+    "占比": {
+      "field_id": "fldwKgVpqF",
+      "field_type": "number",
+      "physical_type": "number|null",
+      "stats": {
+        "null_count": 0,
+        "min": 0.002,
+        "max": 0.416,
+        "avg": 0.1111111111111111
+      },
+      "example": 0.108
+    },
+    "品类": {
+      "field_id": "fldtHIHbeR",
+      "field_type": "text",
+      "physical_type": "string|null",
+      "stats": {
+        "null_count": 0,
+        "max_length": 18
+      },
+      "example": "Tea"
+    },
+    "品类中文": {
+      "field_id": "fldEI7NiRw",
+      "field_type": "text",
+      "physical_type": "string|null",
+      "stats": {
+        "null_count": 9,
+        "max_length": 0
+      },
+      "hint": "All values are empty; type inference may be ambiguous. Avoid analyzing this column unless required."
+    },
+    "平均单价": {
+      "field_id": "fldBq3gUl8",
+      "field_type": "number",
+      "physical_type": "number|null",
+      "stats": {
+        "null_count": 0,
+        "min": 0.8,
+        "max": 21.02,
+        "avg": 7.933333333333333
+      },
+      "example": 0.8
+    },
+    "总销量": {
+      "field_id": "fldnnaXXyd",
+      "field_type": "number",
+      "physical_type": "number|null",
+      "stats": {
+        "null_count": 0,
+        "min": 487,
+        "max": 89250,
+        "avg": 23830
+      },
+      "example": 776
+    }
+  }
+}
