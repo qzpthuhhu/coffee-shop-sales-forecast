@@ -1,7 +1,7 @@
 {
-  "run_id": "rolling_backtest_6ca113527c1a53a1",
-  "pipeline_version": "rolling-backtest-v3-prediction-shap",
-  "generated_at": "2026-10-11T22:08:25+00:00",
+  "run_id": "rolling_backtest_3a624df34b2e9713",
+  "pipeline_version": "rolling-backtest-v4-conformal-intervals",
+  "generated_at": "2026-10-11T23:06:42+00:00",
   "model_name": "Global LightGBM (lightgbm.LGBMRegressor)",
   "candidate_status": "candidate",
   "candidate_rule": "Aggregate LightGBM MAE and WAPE must both beat the best origin-safe baseline",
@@ -86,6 +86,13 @@
     "pred_p50": 0.5,
     "pred_p90": 0.9
   },
+  "interval_calibration": {
+    "method": "split conformalized quantile regression",
+    "target_coverage": 0.8,
+    "calibration_window_days": 7,
+    "score": "max(pred_p10 - actual, actual - pred_p90)",
+    "finite_sample_correction": true
+  },
   "quantile_parameters": {
     "objective": "quantile",
     "base_parameters": {
@@ -108,9 +115,30 @@
     {
       "forecast_origin": "2023-05-27",
       "fit_start": "2023-01-29",
+      "fit_end": "2023-05-12",
+      "early_stopping_start": "2023-05-13",
+      "early_stopping_end": "2023-05-19",
+      "calibration_start": "2023-05-20",
+      "calibration_end": "2023-05-26",
+      "calibration_sample_count": 1680,
+      "conformal_adjustment": 0.34930497136229954,
+      "best_iteration": 240,
+      "quantile_best_iterations": {
+        "pred_p10": 951,
+        "pred_p50": 257,
+        "pred_p90": 141
+      }
+    },
+    {
+      "forecast_origin": "2023-06-03",
+      "fit_start": "2023-01-29",
       "fit_end": "2023-05-19",
       "early_stopping_start": "2023-05-20",
       "early_stopping_end": "2023-05-26",
+      "calibration_start": "2023-05-27",
+      "calibration_end": "2023-06-02",
+      "calibration_sample_count": 1680,
+      "conformal_adjustment": 0.21028034489641279,
       "best_iteration": 171,
       "quantile_best_iterations": {
         "pred_p10": 540,
@@ -119,11 +147,15 @@
       }
     },
     {
-      "forecast_origin": "2023-06-03",
+      "forecast_origin": "2023-06-10",
       "fit_start": "2023-01-29",
       "fit_end": "2023-05-26",
       "early_stopping_start": "2023-05-27",
       "early_stopping_end": "2023-06-02",
+      "calibration_start": "2023-06-03",
+      "calibration_end": "2023-06-09",
+      "calibration_sample_count": 1680,
+      "conformal_adjustment": 0.49531239375300373,
       "best_iteration": 245,
       "quantile_best_iterations": {
         "pred_p10": 397,
@@ -132,11 +164,15 @@
       }
     },
     {
-      "forecast_origin": "2023-06-10",
+      "forecast_origin": "2023-06-17",
       "fit_start": "2023-01-29",
       "fit_end": "2023-06-02",
       "early_stopping_start": "2023-06-03",
       "early_stopping_end": "2023-06-09",
+      "calibration_start": "2023-06-10",
+      "calibration_end": "2023-06-16",
+      "calibration_sample_count": 1680,
+      "conformal_adjustment": 0.18993408734570494,
       "best_iteration": 512,
       "quantile_best_iterations": {
         "pred_p10": 280,
@@ -145,29 +181,20 @@
       }
     },
     {
-      "forecast_origin": "2023-06-17",
+      "forecast_origin": "2023-06-24",
       "fit_start": "2023-01-29",
       "fit_end": "2023-06-09",
       "early_stopping_start": "2023-06-10",
       "early_stopping_end": "2023-06-16",
+      "calibration_start": "2023-06-17",
+      "calibration_end": "2023-06-23",
+      "calibration_sample_count": 1680,
+      "conformal_adjustment": 0.09056423189423524,
       "best_iteration": 435,
       "quantile_best_iterations": {
         "pred_p10": 956,
         "pred_p50": 851,
         "pred_p90": 171
-      }
-    },
-    {
-      "forecast_origin": "2023-06-24",
-      "fit_start": "2023-01-29",
-      "fit_end": "2023-06-16",
-      "early_stopping_start": "2023-06-17",
-      "early_stopping_end": "2023-06-23",
-      "best_iteration": 559,
-      "quantile_best_iterations": {
-        "pred_p10": 482,
-        "pred_p50": 581,
-        "pred_p90": 332
       }
     }
   ],
@@ -182,7 +209,7 @@
     "row_count": 8400,
     "contribution_count": 369600,
     "features_per_prediction": 44,
-    "maximum_absolute_additivity_error": 6.52811138479592e-14,
+    "maximum_absolute_additivity_error": 5.5067062021407764e-14,
     "postprocessing": "pred_lightgbm = max(0, pred_lightgbm_raw); postprocess_adjustment is stored separately from SHAP"
   },
   "artifacts": {
@@ -191,7 +218,8 @@
     "quality_report": "reports/model_quality/rolling_backtest_quality.csv"
   },
   "limitations": [
-    "P10/P50/P90 are empirical LightGBM quantiles and are not causal or conformally calibrated.",
+    "P10/P90 use split conformal calibration for marginal 80% coverage; P50 remains the raw median quantile.",
+    "Conformal coverage is marginal over the calibration population and is not guaranteed for each store, SKU, or horizon day.",
     "This retrospective backtest covers five fixed seven-day origins only.",
     "TreeSHAP explains model output and feature association, not causal business impact."
   ]

@@ -27,7 +27,7 @@ from predict_pipeline import (
 
 REPORT_DIR = DATA_DIR / "reports" / "model_quality"
 BACKTEST_WINDOW_COUNT = 5
-PIPELINE_VERSION = "rolling-backtest-v3-prediction-shap"
+PIPELINE_VERSION = "rolling-backtest-v4-conformal-intervals"
 ENTITY_KEYS = ["store_id", "product_id"]
 HISTORY_FEATURE_COLS = (
     [f"qty_lag_{lag}" for lag in HISTORY_LAGS]
@@ -49,6 +49,7 @@ QUANTILE_LEVELS = {
     "pred_p50": 0.50,
     "pred_p90": 0.90,
 }
+INTERVAL_TARGET_COVERAGE = 0.80
 SHAP_ADDITIVITY_TOLERANCE = 1e-6
 
 
@@ -67,6 +68,7 @@ def build_model_run_id(
         "features": feature_cols,
         "parameters": LIGHTGBM_PARAMS,
         "quantile_levels": QUANTILE_LEVELS,
+        "interval_target_coverage": INTERVAL_TARGET_COVERAGE,
     }
     digest = hashlib.sha256(
         json.dumps(run_contract, sort_keys=True).encode("utf-8")
@@ -166,15 +168,20 @@ def select_backtest_origins(
 
 
 def _fit_model_for_origin(df, feature_cols, origin, horizon):
-    """Fit point and quantile models using data strictly before origin."""
-    internal_validation_start = origin - pd.Timedelta(days=horizon)
+    """Fit models with disjoint training, validation, and calibration windows."""
+    calibration_start = origin - pd.Timedelta(days=horizon)
+    internal_validation_start = calibration_start - pd.Timedelta(days=horizon)
     fit_df = df[df["date"] < internal_validation_start].dropna(
         subset=feature_cols + ["qty"]
     )
     validation_df = df[
-        (df["date"] >= internal_validation_start) & (df["date"] < origin)
+        (df["date"] >= internal_validation_start)
+        & (df["date"] < calibration_start)
     ].dropna(subset=feature_cols + ["qty"])
-    if fit_df.empty or validation_df.empty:
+    calibration_df = df[
+        (df["date"] >= calibration_start) & (df["date"] < origin)
+    ].dropna(subset=feature_cols + ["qty"])
+    if fit_df.empty or validation_df.empty or calibration_df.empty:
         raise ValueError(f"Insufficient training history for origin {origin.date()}")
 
     model = LGBMRegressor(**LIGHTGBM_PARAMS)
@@ -204,7 +211,7 @@ def _fit_model_for_origin(df, feature_cols, origin, horizon):
             callbacks=[early_stopping(50, verbose=False), log_evaluation(0)],
         )
         quantile_models[prediction_column] = quantile_model
-    return model, quantile_models, fit_df, validation_df
+    return model, quantile_models, fit_df, validation_df, calibration_df
 
 
 def recursive_forecast(
@@ -298,6 +305,56 @@ def recursive_forecast(
     return forecasts
 
 
+def calculate_conformal_adjustment(
+    calibration_forecast,
+    target_coverage=INTERVAL_TARGET_COVERAGE,
+):
+    """Calculate the finite-sample CQR correction from pre-origin forecasts."""
+    required_columns = {"qty", "pred_p10", "pred_p90"}
+    missing = required_columns.difference(calibration_forecast.columns)
+    if missing:
+        raise ValueError(f"Missing conformal calibration columns: {sorted(missing)}")
+    if not 0 < target_coverage < 1:
+        raise ValueError("target_coverage must be between 0 and 1")
+
+    scores = np.maximum(
+        calibration_forecast["pred_p10"].to_numpy(dtype=float)
+        - calibration_forecast["qty"].to_numpy(dtype=float),
+        calibration_forecast["qty"].to_numpy(dtype=float)
+        - calibration_forecast["pred_p90"].to_numpy(dtype=float),
+    )
+    scores = scores[np.isfinite(scores)]
+    if len(scores) == 0:
+        raise ValueError("Conformal calibration requires finite scores")
+
+    quantile_level = min(
+        1.0,
+        np.ceil((len(scores) + 1) * target_coverage) / len(scores),
+    )
+    return float(np.quantile(scores, quantile_level, method="higher"))
+
+
+def apply_conformal_adjustment(forecast, adjustment):
+    """Apply a scalar CQR correction while preserving ordered nonnegative bounds."""
+    result = forecast.copy()
+    result["pred_p10_uncalibrated"] = result["pred_p10"]
+    result["pred_p90_uncalibrated"] = result["pred_p90"]
+    calibrated_lower = np.clip(
+        result["pred_p10_uncalibrated"] - adjustment,
+        a_min=0,
+        a_max=None,
+    )
+    calibrated_upper = np.clip(
+        result["pred_p90_uncalibrated"] + adjustment,
+        a_min=0,
+        a_max=None,
+    )
+    result["pred_p10"] = np.minimum(calibrated_lower, result["pred_p50"])
+    result["pred_p90"] = np.maximum(calibrated_upper, result["pred_p50"])
+    result["conformal_adjustment"] = adjustment
+    return result
+
+
 def add_origin_safe_baselines(forecast_df, df, origin):
     """Add baselines that use only observations available at forecast origin."""
     history = df[df["date"] < origin][["date", *ENTITY_KEYS, "qty"]].copy()
@@ -388,7 +445,9 @@ def build_quality_report(predictions):
                     "validation_end": frame["date"].max().date().isoformat(),
                     **metrics,
                     "interval_status": (
-                        "empirical_p10_p90" if interval_available else "not_applicable"
+                        "conformalized_p10_p90"
+                        if interval_available
+                        else "not_applicable"
                     ),
                 }
             )
@@ -464,12 +523,28 @@ def run_rolling_backtest(
 
     for origin in origins:
         print(f"\nBacktest origin {origin.date()} ({horizon} days)")
-        model, quantile_models, fit_df, validation_df = _fit_model_for_origin(
+        (
+            model,
+            quantile_models,
+            fit_df,
+            validation_df,
+            calibration_df,
+        ) = _fit_model_for_origin(
             df,
             feature_cols,
             origin,
             horizon,
         )
+        calibration_start = calibration_df["date"].min()
+        calibration_forecast = recursive_forecast(
+            model,
+            df,
+            feature_cols,
+            calibration_start,
+            horizon,
+            quantile_models=quantile_models,
+        )
+        conformal_adjustment = calculate_conformal_adjustment(calibration_forecast)
         forecast, shap_contributions = recursive_forecast(
             model,
             df,
@@ -480,6 +555,7 @@ def run_rolling_backtest(
             model_run_id=run_id,
             include_explanations=True,
         )
+        forecast = apply_conformal_adjustment(forecast, conformal_adjustment)
         forecast = add_origin_safe_baselines(forecast, df, origin)
         forecast["forecast_origin"] = origin
         forecast["horizon_day"] = (forecast["date"] - origin).dt.days + 1
@@ -494,6 +570,10 @@ def run_rolling_backtest(
                 "fit_end": fit_df["date"].max().date().isoformat(),
                 "early_stopping_start": validation_df["date"].min().date().isoformat(),
                 "early_stopping_end": validation_df["date"].max().date().isoformat(),
+                "calibration_start": calibration_df["date"].min().date().isoformat(),
+                "calibration_end": calibration_df["date"].max().date().isoformat(),
+                "calibration_sample_count": len(calibration_forecast),
+                "conformal_adjustment": conformal_adjustment,
                 "best_iteration": int(model.best_iteration_),
                 "quantile_best_iterations": {
                     column: int(quantile_model.best_iteration_)
@@ -531,6 +611,9 @@ def run_rolling_backtest(
         *PREDICTION_COLUMNS.values(),
         "postprocess_adjustment",
         *QUANTILE_LEVELS,
+        "pred_p10_uncalibrated",
+        "pred_p90_uncalibrated",
+        "conformal_adjustment",
         "base_value",
         "shap_sum",
         "shap_additivity_error",
@@ -563,6 +646,13 @@ def run_rolling_backtest(
         "features": feature_cols,
         "parameters": LIGHTGBM_PARAMS,
         "quantile_levels": QUANTILE_LEVELS,
+        "interval_calibration": {
+            "method": "split conformalized quantile regression",
+            "target_coverage": INTERVAL_TARGET_COVERAGE,
+            "calibration_window_days": horizon,
+            "score": "max(pred_p10 - actual, actual - pred_p90)",
+            "finite_sample_correction": True,
+        },
         "quantile_parameters": {
             "objective": "quantile",
             "base_parameters": {
@@ -594,7 +684,8 @@ def run_rolling_backtest(
             "quality_report": str(quality_path.relative_to(DATA_DIR)),
         },
         "limitations": [
-            "P10/P50/P90 are empirical LightGBM quantiles and are not causal or conformally calibrated.",
+            "P10/P90 use split conformal calibration for marginal 80% coverage; P50 remains the raw median quantile.",
+            "Conformal coverage is marginal over the calibration population and is not guaranteed for each store, SKU, or horizon day.",
             "This retrospective backtest covers five fixed seven-day origins only.",
             "TreeSHAP explains model output and feature association, not causal business impact.",
         ],

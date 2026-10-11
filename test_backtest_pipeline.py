@@ -8,10 +8,13 @@ from lightgbm import LGBMRegressor
 
 from backtest_pipeline import (
     HISTORY_FEATURE_COLS,
+    INTERVAL_TARGET_COVERAGE,
     SHAP_ADDITIVITY_TOLERANCE,
+    apply_conformal_adjustment,
     add_origin_safe_baselines,
     add_prediction_identity,
     build_quality_report,
+    calculate_conformal_adjustment,
     explain_tree_predictions,
     recursive_forecast,
     select_backtest_origins,
@@ -51,7 +54,7 @@ class ShiftedLagOneModel:
 
 
 class RollingBacktestTest(unittest.TestCase):
-    def test_tracked_artifacts_include_empirical_quantile_intervals(self):
+    def test_tracked_artifacts_include_conformalized_quantile_intervals(self):
         report_dir = Path(__file__).parent / "reports" / "model_quality"
         predictions = pd.read_csv(
             report_dir / "rolling_backtest_predictions.csv"
@@ -67,7 +70,14 @@ class RollingBacktestTest(unittest.TestCase):
         self.assertEqual(predictions["prediction_id"].nunique(), len(predictions))
         self.assertEqual(predictions["model_run_id"].nunique(), 1)
         self.assertTrue(
-            {"pred_p10", "pred_p50", "pred_p90"}.issubset(predictions.columns)
+            {
+                "pred_p10",
+                "pred_p50",
+                "pred_p90",
+                "pred_p10_uncalibrated",
+                "pred_p90_uncalibrated",
+                "conformal_adjustment",
+            }.issubset(predictions.columns)
         )
         self.assertFalse((predictions["pred_p10"] > predictions["pred_p50"]).any())
         self.assertFalse((predictions["pred_p50"] > predictions["pred_p90"]).any())
@@ -75,12 +85,26 @@ class RollingBacktestTest(unittest.TestCase):
             (quality["level"] == "overall")
             & (quality["method"] == "lightgbm")
         ].iloc[0]
-        self.assertEqual(overall["interval_status"], "empirical_p10_p90")
+        self.assertEqual(overall["interval_status"], "conformalized_p10_p90")
         self.assertTrue(np.isfinite(overall["interval_coverage"]))
         self.assertTrue(np.isfinite(overall["interval_mean_width"]))
         self.assertEqual(
             metadata["quantile_levels"],
             {"pred_p10": 0.1, "pred_p50": 0.5, "pred_p90": 0.9},
+        )
+        self.assertEqual(
+            metadata["interval_calibration"]["target_coverage"],
+            INTERVAL_TARGET_COVERAGE,
+        )
+        self.assertEqual(
+            metadata["interval_calibration"]["method"],
+            "split conformalized quantile regression",
+        )
+        self.assertTrue(
+            all(
+                "conformal_adjustment" in training_run
+                for training_run in metadata["training_runs"]
+            )
         )
         feature_count = metadata["feature_count"]
         self.assertEqual(len(contributions), len(predictions) * feature_count)
@@ -289,6 +313,46 @@ class RollingBacktestTest(unittest.TestCase):
             candidate[["pred_p10", "pred_p50", "pred_p90"]],
         )
 
+    def test_conformal_adjustment_uses_finite_sample_quantile(self):
+        calibration = pd.DataFrame(
+            {
+                "qty": [7, 9, 12, 17],
+                "pred_p10": [8, 8, 8, 8],
+                "pred_p90": [12, 12, 12, 12],
+            }
+        )
+
+        adjustment = calculate_conformal_adjustment(
+            calibration,
+            target_coverage=0.75,
+        )
+
+        self.assertEqual(adjustment, 5)
+
+    def test_conformal_adjustment_preserves_raw_bounds_and_order(self):
+        forecast = pd.DataFrame(
+            {
+                "pred_p10": [1.0, 5.0],
+                "pred_p50": [2.0, 6.0],
+                "pred_p90": [3.0, 7.0],
+            }
+        )
+
+        calibrated = apply_conformal_adjustment(forecast, adjustment=2.0)
+
+        np.testing.assert_allclose(
+            calibrated["pred_p10_uncalibrated"],
+            forecast["pred_p10"],
+        )
+        np.testing.assert_allclose(
+            calibrated["pred_p90_uncalibrated"],
+            forecast["pred_p90"],
+        )
+        np.testing.assert_allclose(calibrated["pred_p10"], [0.0, 3.0])
+        np.testing.assert_allclose(calibrated["pred_p90"], [5.0, 9.0])
+        self.assertTrue((calibrated["pred_p10"] <= calibrated["pred_p50"]).all())
+        self.assertTrue((calibrated["pred_p50"] <= calibrated["pred_p90"]).all())
+
     def test_baselines_are_unchanged_when_future_labels_change(self):
         origin = pd.Timestamp("2023-02-12")
         source = make_panel()
@@ -339,7 +403,7 @@ class RollingBacktestTest(unittest.TestCase):
         self.assertEqual(model_overall["interval_coverage"], 1)
         self.assertEqual(model_overall["interval_mean_width"], 4)
         self.assertEqual(model_overall["interval_median_width"], 4)
-        self.assertEqual(model_overall["interval_status"], "empirical_p10_p90")
+        self.assertEqual(model_overall["interval_status"], "conformalized_p10_p90")
 
         baseline_overall = report[
             (report["level"] == "overall")
