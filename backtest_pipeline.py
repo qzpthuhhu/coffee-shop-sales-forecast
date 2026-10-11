@@ -42,6 +42,11 @@ PREDICTION_COLUMNS = {
     "baseline_last_week": "pred_baseline_last_week",
     "baseline_rolling_28d": "pred_baseline_rolling_28d",
 }
+QUANTILE_LEVELS = {
+    "pred_p10": 0.10,
+    "pred_p50": 0.50,
+    "pred_p90": 0.90,
+}
 
 
 def select_backtest_origins(
@@ -63,7 +68,7 @@ def select_backtest_origins(
 
 
 def _fit_model_for_origin(df, feature_cols, origin, horizon):
-    """Fit with an internal validation window that is strictly before origin."""
+    """Fit point and quantile models using data strictly before origin."""
     internal_validation_start = origin - pd.Timedelta(days=horizon)
     fit_df = df[df["date"] < internal_validation_start].dropna(
         subset=feature_cols + ["qty"]
@@ -83,10 +88,35 @@ def _fit_model_for_origin(df, feature_cols, origin, horizon):
         eval_metric="mae",
         callbacks=[early_stopping(50, verbose=False), log_evaluation(0)],
     )
-    return model, fit_df, validation_df
+    quantile_models = {}
+    for prediction_column, alpha in QUANTILE_LEVELS.items():
+        quantile_model = LGBMRegressor(
+            **{
+                **LIGHTGBM_PARAMS,
+                "objective": "quantile",
+                "alpha": alpha,
+            }
+        )
+        quantile_model.fit(
+            fit_df[feature_cols],
+            fit_df["qty"],
+            eval_X=validation_df[feature_cols],
+            eval_y=validation_df["qty"],
+            eval_metric="quantile",
+            callbacks=[early_stopping(50, verbose=False), log_evaluation(0)],
+        )
+        quantile_models[prediction_column] = quantile_model
+    return model, quantile_models, fit_df, validation_df
 
 
-def recursive_forecast(model, df, feature_cols, origin, horizon):
+def recursive_forecast(
+    model,
+    df,
+    feature_cols,
+    origin,
+    horizon,
+    quantile_models=None,
+):
     """Forecast one day at a time without reading labels at or after origin."""
     forecast_dates = pd.date_range(origin, periods=horizon, freq="D")
     state = df[["date", *ENTITY_KEYS, "qty"]].copy()
@@ -111,6 +141,19 @@ def recursive_forecast(model, df, feature_cols, origin, horizon):
             a_min=0,
             a_max=None,
         )
+        if quantile_models:
+            quantiles = np.column_stack(
+                [
+                    np.clip(
+                        quantile_models[column].predict(current[feature_cols]),
+                        a_min=0,
+                        a_max=None,
+                    )
+                    for column in QUANTILE_LEVELS
+                ]
+            )
+            quantiles.sort(axis=1)
+            current[list(QUANTILE_LEVELS)] = quantiles
         forecast_rows.append(current)
 
         predicted = current[[*ENTITY_KEYS, "pred_lightgbm"]].rename(
@@ -164,11 +207,21 @@ def add_origin_safe_baselines(forecast_df, df, origin):
     return result
 
 
-def calculate_metrics(actual, predicted):
+def calculate_metrics(actual, predicted, lower=None, upper=None):
     actual = np.asarray(actual, dtype=float)
     predicted = np.asarray(predicted, dtype=float)
     error = actual - predicted
     denominator = np.abs(actual).sum()
+    interval_coverage = np.nan
+    interval_mean_width = np.nan
+    interval_median_width = np.nan
+    if lower is not None and upper is not None:
+        lower = np.asarray(lower, dtype=float)
+        upper = np.asarray(upper, dtype=float)
+        interval_width = upper - lower
+        interval_coverage = float(((actual >= lower) & (actual <= upper)).mean())
+        interval_mean_width = float(interval_width.mean())
+        interval_median_width = float(np.median(interval_width))
     return {
         "sample_count": int(len(actual)),
         "mae": float(mean_absolute_error(actual, predicted)),
@@ -177,7 +230,9 @@ def calculate_metrics(actual, predicted):
         "r2": float(r2_score(actual, predicted)) if len(actual) > 1 else np.nan,
         "within_10pct": float((np.abs(error / (actual + 1)) < 0.10).mean()),
         "within_20pct": float((np.abs(error / (actual + 1)) < 0.20).mean()),
-        "interval_coverage": np.nan,
+        "interval_coverage": interval_coverage,
+        "interval_mean_width": interval_mean_width,
+        "interval_median_width": interval_median_width,
     }
 
 
@@ -187,7 +242,13 @@ def build_quality_report(predictions):
 
     def append_metrics(frame, level, entity_id, entity_name=None):
         for method, prediction_column in PREDICTION_COLUMNS.items():
-            metrics = calculate_metrics(frame["qty"], frame[prediction_column])
+            interval_available = method == "lightgbm"
+            metrics = calculate_metrics(
+                frame["qty"],
+                frame[prediction_column],
+                lower=frame["pred_p10"] if interval_available else None,
+                upper=frame["pred_p90"] if interval_available else None,
+            )
             rows.append(
                 {
                     "level": level,
@@ -199,7 +260,9 @@ def build_quality_report(predictions):
                     "validation_start": frame["date"].min().date().isoformat(),
                     "validation_end": frame["date"].max().date().isoformat(),
                     **metrics,
-                    "interval_status": "not_available",
+                    "interval_status": (
+                        "empirical_p10_p90" if interval_available else "not_applicable"
+                    ),
                 }
             )
 
@@ -263,13 +326,20 @@ def run_rolling_backtest(
 
     for origin in origins:
         print(f"\nBacktest origin {origin.date()} ({horizon} days)")
-        model, fit_df, validation_df = _fit_model_for_origin(
+        model, quantile_models, fit_df, validation_df = _fit_model_for_origin(
             df,
             feature_cols,
             origin,
             horizon,
         )
-        forecast = recursive_forecast(model, df, feature_cols, origin, horizon)
+        forecast = recursive_forecast(
+            model,
+            df,
+            feature_cols,
+            origin,
+            horizon,
+            quantile_models=quantile_models,
+        )
         forecast = add_origin_safe_baselines(forecast, df, origin)
         forecast["forecast_origin"] = origin
         forecast["horizon_day"] = (forecast["date"] - origin).dt.days + 1
@@ -282,6 +352,10 @@ def run_rolling_backtest(
                 "early_stopping_start": validation_df["date"].min().date().isoformat(),
                 "early_stopping_end": validation_df["date"].max().date().isoformat(),
                 "best_iteration": int(model.best_iteration_),
+                "quantile_best_iterations": {
+                    column: int(quantile_model.best_iteration_)
+                    for column, quantile_model in quantile_models.items()
+                },
             }
         )
 
@@ -306,6 +380,7 @@ def run_rolling_backtest(
         "product_type",
         "qty",
         *PREDICTION_COLUMNS.values(),
+        *QUANTILE_LEVELS,
     ]
     predictions[prediction_columns].to_csv(prediction_path, index=False)
     quality.to_csv(quality_path, index=False)
@@ -328,6 +403,15 @@ def run_rolling_backtest(
         "feature_count": len(feature_cols),
         "features": feature_cols,
         "parameters": LIGHTGBM_PARAMS,
+        "quantile_levels": QUANTILE_LEVELS,
+        "quantile_parameters": {
+            "objective": "quantile",
+            "base_parameters": {
+                key: value
+                for key, value in LIGHTGBM_PARAMS.items()
+                if key != "objective"
+            },
+        },
         "training_runs": training_runs,
         "source_hashes": {
             SALES_FILE.name: _sha256(SALES_FILE),
@@ -338,7 +422,7 @@ def run_rolling_backtest(
             "quality_report": str(quality_path.relative_to(DATA_DIR)),
         },
         "limitations": [
-            "P10/P50/P90 intervals are not implemented; interval coverage is unavailable.",
+            "P10/P50/P90 are empirical LightGBM quantiles and are not causal or conformally calibrated.",
             "This retrospective backtest covers five fixed seven-day origins only.",
             "SHAP explanations are not included in this backtest artifact.",
         ],
@@ -349,7 +433,17 @@ def run_rolling_backtest(
     )
 
     overall = quality[quality["level"] == "overall"][
-        ["method", "mae", "rmse", "wape", "r2", "within_10pct", "within_20pct"]
+        [
+            "method",
+            "mae",
+            "rmse",
+            "wape",
+            "r2",
+            "within_10pct",
+            "within_20pct",
+            "interval_coverage",
+            "interval_mean_width",
+        ]
     ]
     print("\nAggregate rolling-backtest quality:")
     print(overall.to_string(index=False))

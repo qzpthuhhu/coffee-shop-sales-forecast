@@ -1,6 +1,6 @@
 {
-  "run_id": "rolling_backtest_20261011T200507Z",
-  "generated_at": "2026-10-11T20:05:07+00:00",
+  "run_id": "rolling_backtest_20261011T210440Z",
+  "generated_at": "2026-10-11T21:04:40+00:00",
   "model_name": "Global LightGBM (lightgbm.LGBMRegressor)",
   "candidate_status": "candidate",
   "candidate_rule": "Aggregate LightGBM MAE and WAPE must both beat the best origin-safe baseline",
@@ -80,6 +80,29 @@
     "n_jobs": 1,
     "verbosity": -1
   },
+  "quantile_levels": {
+    "pred_p10": 0.1,
+    "pred_p50": 0.5,
+    "pred_p90": 0.9
+  },
+  "quantile_parameters": {
+    "objective": "quantile",
+    "base_parameters": {
+      "n_estimators": 1000,
+      "learning_rate": 0.03,
+      "num_leaves": 63,
+      "max_depth": -1,
+      "min_child_samples": 20,
+      "subsample": 0.9,
+      "subsample_freq": 1,
+      "colsample_bytree": 0.9,
+      "reg_alpha": 0.05,
+      "reg_lambda": 0.1,
+      "random_state": 42,
+      "n_jobs": 1,
+      "verbosity": -1
+    }
+  },
   "training_runs": [
     {
       "forecast_origin": "2023-05-27",
@@ -87,7 +110,12 @@
       "fit_end": "2023-05-19",
       "early_stopping_start": "2023-05-20",
       "early_stopping_end": "2023-05-26",
-      "best_iteration": 171
+      "best_iteration": 171,
+      "quantile_best_iterations": {
+        "pred_p10": 540,
+        "pred_p50": 183,
+        "pred_p90": 172
+      }
     },
     {
       "forecast_origin": "2023-06-03",
@@ -95,7 +123,12 @@
       "fit_end": "2023-05-26",
       "early_stopping_start": "2023-05-27",
       "early_stopping_end": "2023-06-02",
-      "best_iteration": 245
+      "best_iteration": 245,
+      "quantile_best_iterations": {
+        "pred_p10": 397,
+        "pred_p50": 245,
+        "pred_p90": 422
+      }
     },
     {
       "forecast_origin": "2023-06-10",
@@ -103,7 +136,12 @@
       "fit_end": "2023-06-02",
       "early_stopping_start": "2023-06-03",
       "early_stopping_end": "2023-06-09",
-      "best_iteration": 512
+      "best_iteration": 512,
+      "quantile_best_iterations": {
+        "pred_p10": 280,
+        "pred_p50": 310,
+        "pred_p90": 452
+      }
     },
     {
       "forecast_origin": "2023-06-17",
@@ -111,7 +149,12 @@
       "fit_end": "2023-06-09",
       "early_stopping_start": "2023-06-10",
       "early_stopping_end": "2023-06-16",
-      "best_iteration": 435
+      "best_iteration": 435,
+      "quantile_best_iterations": {
+        "pred_p10": 956,
+        "pred_p50": 851,
+        "pred_p90": 171
+      }
     },
     {
       "forecast_origin": "2023-06-24",
@@ -119,7 +162,12 @@
       "fit_end": "2023-06-16",
       "early_stopping_start": "2023-06-17",
       "early_stopping_end": "2023-06-23",
-      "best_iteration": 559
+      "best_iteration": 559,
+      "quantile_best_iterations": {
+        "pred_p10": 482,
+        "pred_p50": 581,
+        "pred_p90": 332
+      }
     }
   ],
   "source_hashes": {
@@ -131,7 +179,7 @@
     "quality_report": "reports/model_quality/rolling_backtest_quality.csv"
   },
   "limitations": [
-    "P10/P50/P90 intervals are not implemented; interval coverage is unavailable.",
+    "P10/P50/P90 are empirical LightGBM quantiles and are not causal or conformally calibrated.",
     "This retrospective backtest covers five fixed seven-day origins only.",
     "SHAP explanations are not included in this backtest artifact."
   ]
