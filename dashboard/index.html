@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>柠季 · Coffee Shop 销量预测 Demo</title>
+<title>Coffee Shop SKU 销量预测验证台</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
 <style>
@@ -90,20 +90,20 @@ code { font-size:0.85rem; background:#252836; padding:2px 6px; border-radius:4px
 <body>
 
 <div class="container">
-  <!-- Hero -->
+  <!-- Header -->
   <div class="hero">
-    <h1>柠季 · 门店销量预测 Demo</h1>
-    <p>基于 Coffee Shop Sales 数据集，采用 Global LightGBM 架构的 SKU 级日销量预测方案<br>支持多层次预测、特征归因与 LLM 根因分析</p>
+    <h1>Coffee Shop SKU 销量预测验证台</h1>
+    <p id="validation-scope">正在加载最近一次可信验证结果...</p>
   </div>
 
   <!-- Key Metrics -->
   <div class="metrics" id="metrics">
-    <div class="metric good"><div class="value" id="m-r2">--</div><div class="label">R² (日均总量)</div></div>
+    <div class="metric good"><div class="value" id="m-r2">--</div><div class="label">SKU 级 R²</div></div>
     <div class="metric accent"><div class="value" id="m-mae">--</div><div class="label">MAE (杯/SKU)</div></div>
+    <div class="metric"><div class="value" id="m-rmse">--</div><div class="label">RMSE (杯/SKU)</div></div>
     <div class="metric"><div class="value" id="m-p10">--</div><div class="label">±10% 命中率</div></div>
     <div class="metric"><div class="value" id="m-p20">--</div><div class="label">±20% 命中率</div></div>
-    <div class="metric"><div class="value">43</div><div class="label">特征维度</div></div>
-    <div class="metric"><div class="value">7 天</div><div class="label">测试周期</div></div>
+    <div class="metric"><div class="value" id="m-samples">--</div><div class="label">验证样本</div></div>
   </div>
 
   <!-- === SECTION 1: Predictions Chart === -->
@@ -126,18 +126,8 @@ code { font-size:0.85rem; background:#252836; padding:2px 6px; border-radius:4px
   <div class="card">
     <h2>SHAP 特征重要性</h2>
     <p style="color:var(--text2);font-size:0.9rem;margin-bottom:12px;">
-      TreeSHAP — 模型对每个预测的特征贡献期望值。<code>sku_share</code>（该品类在当日门店的销量占比）和 <code>month</code> 是核心驱动因子。
+      当前训练模型的 TreeSHAP 绝对贡献均值，单位为杯。历史销量特征均严格滞后，<code>sku_share_28d</code> 仅使用预测日前 28 天数据。
     </p>
-    <div class="lvl-select" style="margin-bottom:12px;">
-      <label>查看维度：</label>
-      <button class="tab active" onclick="switchFIMode('global',this)" id="fi-btn-global">全局平均</button>
-      <button class="tab" onclick="switchFIMode('daily',this)" id="fi-btn-daily">按天查看</button>
-    </div>
-    <div id="fi-daily-select" style="display:none;margin-bottom:12px;">
-      <label>选择日期：</label>
-      <select id="fi-date-select" onchange="renderDailySHAP()"></select>
-      <span style="color:var(--text2);font-size:0.8rem;margin-left:8px;" id="fi-shap-note"></span>
-    </div>
     <div class="fi-grid" id="fi-grid"></div>
     <p style="color:var(--text2);font-size:0.75rem;margin-top:8px;" id="fi-note"></p>
   </div>
@@ -149,31 +139,7 @@ code { font-size:0.85rem; background:#252836; padding:2px 6px; border-radius:4px
     <div id="method-content"></div>
   </div>
 
-  <!-- === SECTION 4: LLM Chat === -->
-  <div class="card">
-    <h2>AI 根因分析</h2>
-    <p style="color:var(--text2);font-size:0.9rem;margin-bottom:16px;">连接 OpenRouter 免费模型，分析预测偏差根因。可追问特定日期/门店/品类的预测表现。</p>
-    <div id="chat-config" class="error-banner" style="display:block;">
-      请输入 OpenRouter API Key：<br>
-      <input id="apiKeyInput" type="password" placeholder="sk-or-v1-..." style="margin-top:8px;padding:8px 12px;width:100%;max-width:400px;background:#252836;border:1px solid var(--border);color:var(--text);border-radius:6px;">
-      <button onclick="saveApiKey()" style="margin-top:8px;padding:8px 16px;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer;">保存</button>
-    </div>
-    <div class="chat-log" id="chat-log">
-      <div class="chat-msg system">API Key 已保存。点击下方快捷问题或输入你的问题开始分析。</div>
-    </div>
-    <div class="chat-input-row">
-      <input id="chatInput" type="text" placeholder="输入问题，如：为什么6月28日预测偏低了？" onkeypress="if(event.key==='Enter')sendMessage()">
-      <button id="chatBtn" onclick="sendMessage()" disabled>发送</button>
-    </div>
-    <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;" id="quick-qs">
-      <button onclick="askQuick(this)" class="tab">为什么6/28-29预测偏低？</button>
-      <button onclick="askQuick(this)" class="tab">哪个品类预测最准？</button>
-      <button onclick="askQuick(this)" class="tab">天气对预测的影响有多大？</button>
-      <button onclick="askQuick(this)" class="tab">模型有哪些不足可以改进？</button>
-    </div>
-  </div>
-
-  <!-- === SECTION 5: Error Table === -->
+  <!-- === SECTION 4: Error Table === -->
   <div class="card">
     <h2>预测偏差 Top 10</h2>
     <div style="overflow-x:auto;">
@@ -185,7 +151,7 @@ code { font-size:0.85rem; background:#252836; padding:2px 6px; border-radius:4px
   </div>
 
   <p style="text-align:center;color:var(--text2);font-size:0.8rem;padding:32px 0;">
-    Built with Global LightGBM · 43 features · TimeSeriesSplit CV · OpenRouter LLM
+    <span id="model-footer">加载模型信息...</span>
   </p>
 </div>
 
@@ -204,18 +170,19 @@ async function loadData() {
 
 // ==================== METRICS ====================
 function computeMetrics() {
-  const daily = DATA.daily_predictions;
-  const actuals = daily.map(d => d.actual);
-  const preds = daily.map(d => d.pred);
-  const ssRes = actuals.reduce((s,a,i) => s + (a-preds[i])**2, 0);
-  const mean = actuals.reduce((s,a) => s+a, 0) / actuals.length;
-  const ssTot = actuals.reduce((s,a) => s + (a-mean)**2, 0);
-  const r2 = (1 - ssRes/ssTot);
-  
-  document.getElementById('m-r2').textContent = r2.toFixed(3);
-  document.getElementById('m-mae').textContent = '0.78';
-  document.getElementById('m-p10').textContent = '69.7%';
-  document.getElementById('m-p20').textContent = '93.0%';
+  const metrics = DATA.metrics;
+  const metadata = DATA.metadata;
+  document.getElementById('m-r2').textContent = metrics.r2.toFixed(3);
+  document.getElementById('m-mae').textContent = metrics.mae.toFixed(2);
+  document.getElementById('m-rmse').textContent = metrics.rmse.toFixed(2);
+  document.getElementById('m-p10').textContent = `${metrics.within_10pct.toFixed(1)}%`;
+  document.getElementById('m-p20').textContent = `${metrics.within_20pct.toFixed(1)}%`;
+  document.getElementById('m-samples').textContent = metadata.sample_count.toLocaleString();
+  document.getElementById('validation-scope').textContent =
+    `${metadata.validation_start} 至 ${metadata.validation_end} · ${metadata.validation_days} 天单次留出验证 · ` +
+    `${metadata.sample_count.toLocaleString()} 个门店 × SKU × 日样本`;
+  document.getElementById('model-footer').textContent =
+    `${metadata.model_name} · ${metadata.feature_count} 个特征 · 单次 7 天留出验证，不代表生产精度`;
 }
 
 // ==================== CHARTS ====================
@@ -300,26 +267,6 @@ function switchLevel() {
 }
 
 // ==================== FEATURE IMPORTANCE ====================
-let fiMode = 'global';
-
-function switchFIMode(mode, btn) {
-  fiMode = mode;
-  document.querySelectorAll('#fi-btn-global,#fi-btn-daily').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  
-  if (mode === 'daily') {
-    document.getElementById('fi-daily-select').style.display = 'block';
-    // Populate date dropdown
-    const sel = document.getElementById('fi-date-select');
-    const dates = DATA.test_dates || Object.keys(DATA.per_day_shap || {});
-    sel.innerHTML = dates.map(d => `<option value="${d}">${d}</option>`).join('');
-    renderDailySHAP();
-  } else {
-    document.getElementById('fi-daily-select').style.display = 'none';
-    renderGlobalFI();
-  }
-}
-
 function renderGlobalFI() {
   const grid = document.getElementById('fi-grid');
   const items = DATA.feature_importance;
@@ -327,7 +274,7 @@ function renderGlobalFI() {
   const max = items[0]?.importance || 1;
   grid.innerHTML = items.map((f,i) => {
     const w = Math.max(1, (f.importance / max * 100));
-    const cm = {时序:'#6366f1',天气:'#06b6d4',日历:'#22c55e',节假日:'#f59e0b',品类:'#ec4899',品类/价格:'#ec4899'};
+    const cm = {时序:'#6366f1',天气:'#06b6d4',日历:'#22c55e',节假日:'#f59e0b',品类:'#ec4899','品类/价格':'#ec4899'};
     const color = cm[f.category] || '#8b5cf6';
     return `<div class="fi-item">
       <span class="fi-rank">#${i+1}</span>
@@ -337,33 +284,6 @@ function renderGlobalFI() {
     </div>`;
   }).join('');
   document.getElementById('fi-note').textContent = DATA.shap_note || 'TreeSHAP — 特征对预测的期望贡献（SHAP绝对值均值）';
-}
-
-function renderDailySHAP() {
-  const grid = document.getElementById('fi-grid');
-  const d = document.getElementById('fi-date-select')?.value || (DATA.test_dates||[])[0];
-  const items = (DATA.per_day_shap || {})[d];
-  if (!items || !items.length) { grid.innerHTML = '<p style="color:var(--text2)">该日期无 SHAP 数据</p>'; return; }
-  
-  const max = items[0]?.importance || 1;
-  // Also show weather context
-  const w = DATA.weather_info?.[d];
-  let weatherNote = '';
-  if (w) {
-    weatherNote = ` | 均温 ${w.temp_mean}°C | 降水 ${w.precipitation}mm | ${w.is_rain?'有雨':'无雨'} | ${w.is_holiday?w.holiday_name:'非假日'}`;
-  }
-  
-  grid.innerHTML = items.map((f,i) => {
-    const pct = max > 0 ? Math.max(1, f.importance / max * 100) : 0;
-    return `<div class="fi-item">
-      <span class="fi-rank">#${i+1}</span>
-      <span class="fi-name" title="${f.feature}">${f.feature}</span>
-      <div class="fi-bar-bg"><div class="fi-bar" style="width:${pct}%;background:var(--accent)"></div></div>
-      <span class="fi-pct">${f.importance.toFixed(4)}</span>
-    </div>`;
-  }).join('');
-  document.getElementById('fi-shap-note').textContent = weatherNote;
-  document.getElementById('fi-note').textContent = `[${d}] 当日 SHAP 贡献（绝对值均值）`;
 }
 
 function renderFI() {
@@ -388,145 +308,43 @@ function renderErrTable() {
 
 // ==================== METHODOLOGY ====================
 function renderMethod() {
+  const metadata = DATA.metadata;
+  const metrics = DATA.metrics;
   const content = `
 ### 整体架构：Global HistGradientBoosting + GradientBoosting 加权融合
 
-参考 柠季 AI 店长方案调研 与 销量预测方法调研 的结论：
-> Meta-LightGBM 在真实餐饮数据上精度最高，Global Single Model 泛化能力最强。
+当前实现使用 sklearn 的两个全局树模型处理所有门店和 SKU。它不是 LightGBM；迁移到真实 LightGBM 前，页面不会使用 LightGBM 名称。
 
-#### 特征工程（43 个特征，五梯队）
+#### 特征工程（44 个特征，五梯队）
 
 | 梯队 | 类别 | 特征数 | 代表特征 |
 |------|------|:---:|------|
-| 第一梯队 | 时序销量 | 13 | lag_1/2/3/7/14, rolling_mean/std 7/14/30d, dow_avg |
+| 第一梯队 | 时序销量 | 14 | lag_1/2/3/7/14/28, rolling_mean/std 7/14/28d, dow_avg |
 | 第二梯队 | 日历基础 | 7 | day_of_week, is_weekend, day_of_month, week_of_month |
 | 第三梯队 | 天气 | 13 | 最高/最低/均温, 降水量, 是否下雨/雪/晴, 日照, 湿度 |
 | 第四梯队 | 节假日 | 5 | 13种节日详情, 节前1天/3天, 节后1天, 长周末 |
-| 第五梯队 | 品类/价格 | 2 | 价格相对品类均值, SKU门店占比 |
+| 第五梯队 | 品类/价格 | 2 | 价格相对品类均值, 前 28 天历史 SKU 占比 |
 
 #### 训练策略
-- **交叉验证**：TimeSeriesSplit (n_splits=3)，严格按时间切分，防止未来信息泄露
+- **诊断交叉验证**：TimeSeriesSplit (n_splits=3)
 - **训练/测试**：前 174 天训练 (01/01-06/23)，最后 7 天测试 (06/24-06/30)
 - **集成**：HGB 权重 0.6 + GB 权重 0.4
+- **泄露防护**：所有标签衍生特征至少滞后 1 天，\`sku_share_28d\` 仅使用历史数据
 
-#### 三层预测精度
-| 层级 | 数量 | R² | MAE | ±10% 命中 | ±20% 命中 |
-|------|:---:|:---:|:---:|:---:|:---:|
-| SKU 级 | 80 | 0.961 | 0.8 | 69.6% | 92.9% |
-| 子类型级 | 29 | 0.991 | 3.4 | 85.5% | 95.0% |
-| 品类级 | 9 | 0.992 | 10.8 | 69.8% | 82.5% |
+#### 当前可信验证结果
+| 范围 | 样本 | R² | MAE | RMSE | ±10% | ±20% |
+|------|------:|---:|----:|-----:|-----:|-----:|
+| ${metadata.validation_start} 至 ${metadata.validation_end} | ${metadata.sample_count.toLocaleString()} | ${metrics.r2.toFixed(3)} | ${metrics.mae.toFixed(2)} | ${metrics.rmse.toFixed(2)} | ${metrics.within_10pct.toFixed(1)}% | ${metrics.within_20pct.toFixed(1)}% |
 
 #### 可解释性
-- \`Permutation Importance\` 评估特征贡献（Top 1: qty_lag_1 占 96%）
-- 搭配 \`LLM 根因分析\` 对话，针对偏差最大样本给出业务解释
+- TreeSHAP 已通过加法校验，当前图表展示全局绝对贡献均值
+- 该聚合只表示模型依赖程度，不代表因果关系
+- 逐预测带符号 SHAP 尚未持久化，因此页面不展示伪造的逐日根因
 
-#### 技术选型原因
-选择 LightGBM 而非深度学习（LSTM/TFT），因为：
-1. TFT 在餐饮小时级预测 benchmark 上 ***不如*** LightGBM
-2. LightGBM 训练快（2 分钟）、易解释、易维护
-3. Global Single Model 泛化能力优于逐店建模
+> 限制：这只是单个 7 天留出窗口，不可用于宣称生产精度。后续需要多个滚动 7 天窗口和朴素基线对照。
 `;
   document.getElementById('method-content').innerHTML = marked.parse(content);
 }
-
-// ==================== LLM CHAT ====================
-let API_KEY = '';
-let CHAT_HISTORY = [];
-const MODEL = 'google/gemini-2.0-flash-001';
-
-function saveApiKey() {
-  API_KEY = document.getElementById('apiKeyInput').value.trim();
-  if (API_KEY) {
-    document.getElementById('chat-config').style.display = 'none';
-    document.getElementById('chatBtn').disabled = false;
-    document.getElementById('chat-log').innerHTML = '<div class="chat-msg system">API Key 已保存。点击下方快捷问题或输入你的问题开始分析。</div>';
-    localStorage.setItem('openrouter_key', API_KEY);
-  }
-}
-
-async function sendMessage() {
-  const input = document.getElementById('chatInput');
-  const q = input.value.trim();
-  if (!q) return;
-  if (!API_KEY) { API_KEY = localStorage.getItem('openrouter_key')||''; if(API_KEY) document.getElementById('chat-config').style.display='none'; else return; }
-  document.getElementById('chatBtn').disabled = true;
-  
-  const log = document.getElementById('chat-log');
-  log.innerHTML += `<div class="chat-msg user">${escapeHtml(q)}</div>`;
-  input.value = '';
-  
-  // Context
-  const ctx = buildContext();
-  CHAT_HISTORY.push({role:'user',content:ctx+q});
-  
-  // Loading
-  const loadId = `load-${Date.now()}`;
-  log.innerHTML += `<div class="chat-msg bot" id="${loadId}"><span class="spinner"></span>分析中...</div>`;
-  log.scrollTop = log.scrollHeight;
-  
-  try {
-    const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':`Bearer ${API_KEY}`},
-      body:JSON.stringify({
-        model:MODEL,
-        messages:[
-          {role:'system',content:SYSTEM_PROMPT},
-          ...CHAT_HISTORY.slice(-8)
-        ],
-        max_tokens:600,
-        temperature:0.3
-      })
-    });
-    const data = await resp.json();
-    const reply = data.choices?.[0]?.message?.content || '抱歉，模型返回为空，请重试。';
-    CHAT_HISTORY.push({role:'assistant',content:reply});
-    const el = document.getElementById(loadId);
-    if (el) el.outerHTML = `<div class="chat-msg bot">${marked.parse(reply)}</div>`;
-  } catch(e) {
-    document.getElementById(loadId).outerHTML = `<div class="chat-msg bot" style="color:var(--err)">连接失败：${escapeHtml(e.message)}。请检查 API Key 和网络。</div>`;
-  }
-  document.getElementById('chatBtn').disabled = false;
-  log.scrollTop = log.scrollHeight;
-}
-
-function askQuick(btn) {
-  document.getElementById('chatInput').value = btn.textContent;
-  sendMessage();
-}
-
-function buildContext() {
-  const daily = DATA.daily_predictions;
-  let s = `## Coffee Shop 销量预测数据\n`;
-  s += `测试周期: ${DATA.test_dates[0]} ~ ${DATA.test_dates[DATA.test_dates.length-1]}\n`;
-  s += `模型: HGB+GB 融合, 43特征, TimeSeriesSplit\n\n`;
-  s += `### 日总量预测\n`;
-  s += `|日期|实际|预测|偏差%|\n|---|---|---|---|\n`;
-  daily.forEach(d => s += `|${d.date}|${d.actual}|${d.pred}|${d.error_pct}%|\n`);
-  s += `\n### Top 5 偏差预测偏差\n`;
-  DATA.top_errors.slice(0,5).forEach(e => s += `- ${e.date.slice(0,10)} ${e.store} ${e.category}/${e.type}: 实际${e.actual} 预测${e.pred} (偏差${e.error})\n`);
-  s += `\n### 天气信息\n`;
-  Object.entries(DATA.weather_info).forEach(([d,w]) => {
-    s += `- ${d}: 均温${w.temp_mean}°C 降水${w.precipitation}mm 是否下雨:${w.is_rain} 是否假日:${w.is_holiday}\n`;
-  });
-  return s + `\n请基于以上数据回答：`;
-}
-
-const SYSTEM_PROMPT = `你是柠季茶饮门店销量预测系统的 AI 分析师。基于提供的 Coffee Shop 预测数据，分析预测偏差的根因，给出业务解释和改进建议。
-
-关键信息：
-- 数据来自纽约 3 家咖啡店 (Astoria, Hell's Kitchen, Lower Manhattan)
-- 预测模型: HistGradientBoosting + GradientBoosting 融合，43 特征
-- 测试期: 2023-06-24 ~ 06-30 (7天)
-- 6/28-6/29 销量骤降是因为暴雨骤停 + 独立日(7/4)长假前夕，办公室提前空城
-
-要求：
-1. 用中文回答，简洁专业
-2. 结合天气、日历、门店特点给出根因分析
-3. 给出可操作的改进建议
-4. 用业务语言，不要太技术化`;
-
-function escapeHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
 // ==================== INIT ====================
 function init() {
@@ -535,15 +353,6 @@ function init() {
   renderFI();
   renderErrTable();
   renderMethod();
-  
-  // Try restore API key
-  API_KEY = localStorage.getItem('openrouter_key')||'';
-  if (API_KEY) {
-    document.getElementById('chat-config').style.display = 'none';
-    document.getElementById('chatBtn').disabled = false;
-  } else {
-    document.getElementById('chatBtn').disabled = true;
-  }
 }
 
 loadData();

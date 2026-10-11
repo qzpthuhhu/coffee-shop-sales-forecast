@@ -13,10 +13,10 @@
 | 滚动回测与基线 | 15% | 现有 3 折时间切分只供诊断，尚未实现多个固定 7 天滚动起点、朴素基线和分层质量报告 |
 | 逐预测 SHAP | 30% | TreeSHAP 已恢复非零输出并通过加法校验；尚未持久化每条预测的带符号贡献 |
 | 妙搭全栈 | 0% | 尚无本地 `.spark/meta.json`；应用检索被 `spark:app:read` 用户授权阻塞，未创建应用 |
-| Dashboard | 20% | `dashboard/data.json` 仍是泄露修复前的遗留快照，不能代表当前模型；需改为受控 API 数据源 |
-| Agent | 5% | 现有浏览器直连 OpenRouter 仅为遗留 Demo，不符合服务端密钥和白名单工具要求 |
+| Dashboard | 28% | 已由当前无泄露模型产物可重复生成可信快照，旧污染指标和伪 LightGBM 声明已移除；终态仍需迁移到妙搭受控 API |
+| Agent | 0% | 已移除浏览器直连 OpenRouter 和本地密钥存储；合规的服务端 Pi ReAct Agent 尚未开始 |
 
-> 当前可信离线证据来自 `models/*.csv` 和本日志。旧 Dashboard 中的 0.8 杯 MAE、0.961 R²、69.6%/92.9% 命中率已判定为受标签泄露污染的历史结果，不得继续作为模型能力结论。
+> 当前可信离线证据来自 `models/*.csv`、由 `export_dashboard_data.py` 生成的 `dashboard/data.json` 和本日志。旧 Dashboard 中的 0.8 杯 MAE、0.961 R²、69.6%/92.9% 命中率已判定为受标签泄露污染的历史结果，并已从运行页面删除。
 
 ---
 
@@ -50,7 +50,7 @@
 
 当前采用 **Global HistGradientBoostingRegressor + GradientBoostingRegressor 加权融合**，不做逐店逐 SKU 独立建模。它不是 LightGBM，下一阶段必须迁移到真实 `lightgbm.LGBMRegressor` 后才能使用 LightGBM 名称。
 
-### 2.2 特征工程（43 个特征，四梯队）
+### 2.2 特征工程（44 个特征，五梯队）
 
 | 梯队 | 类别 | 特征数 | 代表特征 |
 |------|------|:---:|------|
@@ -59,6 +59,8 @@
 | 第三梯队 | 天气 | 13 | temperature_max/min/mean, precipitation, is_rain/snow/clear, humidity, wind |
 | 第四梯队 | 节假日 | 5 | is_holiday_detailed (13种), is_pre_holiday_1d/3d, is_post_holiday_1d, is_long_weekend |
 | 第五梯队 | 品类/价格 | 2 | price_vs_category_avg, sku_share_28d（前 28 天历史滚动占比） |
+
+> 已保存的 HGB/GB 模型 `n_features_in_` 和 `feature_names_in_` 均确认实际输入为 44 个特征；此前“43 个特征”是手工计数错误。
 
 ### 2.3 训练策略
 
@@ -157,3 +159,19 @@
 3. **实时叠加层**：结合天气预警、节假日日历做日内动态修正
 4. **冷启动处理**：新品用 Chronos/TimesFM 零样本预测
 5. **门店外部特征**：POI 数据、写字楼入驻率、周边事件日历
+
+---
+
+## 八、迭代记录
+
+### 2026-10-12：可信 Dashboard 快照与前端安全收口
+
+- 新增 `export_dashboard_data.py`，从当前 `models/test_predictions.csv`、`daily_predictions.csv` 和 `shap_importance.csv` 生成 Dashboard 数据。
+- 页面 KPI 改为产物驱动：1,680 样本，MAE 2.67、RMSE 3.89、R² 0.652、±10% 11.7%、±20% 27.3%。
+- 删除浏览器端 OpenRouter Key 输入、`localStorage` 存储、直连接口和无证据根因话术；Agent 等服务端白名单工具落地后再恢复。
+- 删除旧泄露指标、当日 `sku_share` 说明和 Global LightGBM 冒充声明；明确当前只是 sklearn HGB + GB 的单个 7 天留出验证。
+- 新增 4 项 Dashboard 回归测试；全套 10 项 Python 测试通过，Dashboard JavaScript 语法检查通过。
+- Playwright：1440×1000、390×844 均无页面横向溢出，图表非空，控制台无应用错误；移动端表格仅在自身容器内滚动。
+- 妙搭应用仍未创建：按名称检索继续被用户 scope `spark:app:read` 阻塞，避免在未完成检索前创建重复应用。
+
+下一项唯一优先事项：将主模型迁移到真实 `lightgbm.LGBMRegressor`，保留当前无泄露特征与回归测试，并重新训练生成可信产物。
