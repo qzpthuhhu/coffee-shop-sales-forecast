@@ -11,7 +11,7 @@
 | 防数据泄露特征 | 70% | 已移除预测日实际 `sku_share`，改为前 28 天历史滚动占比；星期均值仅使用历史标签；新增 Lag 28 和 6 项回归测试 |
 | 真实 LightGBM 与区间 | 80% | 官方 `lightgbm.LGBMRegressor` 单一全局点模型及 P10/P50/P90 quantile 模型已进入 5 窗口回测；区间尚未做 conformal 校准 |
 | 滚动回测与基线 | 80% | 已实现 5 个固定 7 天滚动起点、三类起点安全基线，以及含区间覆盖率/宽度的多层级质量报告 |
-| 逐预测 SHAP | 35% | 真实 LightGBM TreeSHAP 已通过非零与加法校验；尚未持久化每条预测的带符号贡献 |
+| 逐预测 SHAP | 80% | 8,400 条回测预测均已保存稳定 ID、base value、原始特征值及 44 项带符号 TreeSHAP；尚未接入业务解释与前端瀑布图 |
 | 妙搭全栈 | 0% | 尚无本地 `.spark/meta.json`；应用检索被 `spark:app:read` 用户授权阻塞，未创建应用 |
 | Dashboard | 30% | 已由真实 LightGBM 产物可重复生成可信快照；终态仍需迁移到妙搭受控 API |
 | Agent | 0% | 已移除浏览器直连 OpenRouter 和本地密钥存储；合规的服务端 Pi ReAct Agent 尚未开始 |
@@ -133,6 +133,8 @@
 
 - 使用 **TreeSHAP** 评估真实 LightGBM 贡献，并校验 `base_value + SHAP = model prediction`（最大误差 `3.66e-14`）
 - 当前全局 SHAP top 3：`qty_roll_mean_7d`（1.589 杯）、`qty_roll_mean_28d`（0.881 杯）、`qty_lag_28`（0.391 杯）
+- 五窗口 8,400 条回测预测已全部持久化稳定 `prediction_id`、模型原始输出、非负后处理、base value 和 44 项逐特征带符号贡献，共 369,600 条解释明细
+- 回测 TreeSHAP 最大逐行加法误差为 `6.53e-14`；115 条负模型输出的非负裁剪另存 `postprocess_adjustment`，不伪装为 SHAP 贡献
 - 生成 LLM 根因分析提示词，对接柠季「寻因」需求
 
 ---
@@ -152,7 +154,8 @@
 ├── reports/model_quality/
 │   ├── rolling_backtest_run.json   # 数据哈希、特征、参数、训练窗口与产物索引
 │   ├── rolling_backtest_quality.csv
-│   └── rolling_backtest_predictions.csv
+│   ├── rolling_backtest_predictions.csv
+│   └── rolling_backtest_shap.csv.gz # 逐预测、逐特征带符号 TreeSHAP
 ├── models/
 │   ├── lightgbm_model.pkl          # 官方 LightGBM 模型（本地生成，Git 忽略）
 │   ├── test_predictions.csv        # SKU 级预测结果
@@ -186,6 +189,18 @@
 ---
 
 ## 八、迭代记录
+
+### 2026-10-12：逐预测 TreeSHAP 可追溯合同
+
+- 为每条滚动回测预测生成稳定 `model_run_id` 与 `prediction_id`；标识由数据哈希、起点、参数、特征和 pipeline 版本共同约束，可重复运行复算。
+- 8,400 条预测主表新增实际误差、原始模型输出、非负后处理调整、base value、SHAP 合计与加法误差；369,600 条贡献明细保存特征名、原始值、带符号贡献和方向。
+- TreeSHAP 解释严格绑定每个滚动起点的真实点模型；最大 `base + SHAP = raw model output` 误差为 `6.53e-14`。
+- 115 条负原始输出的非负裁剪单独记录为 `postprocess_adjustment`，最终预测同样可逐行对账，禁止把后处理描述为模型特征贡献。
+- 完整重训后质量不变：MAE 2.639、WAPE 38.0%、P10-P90 覆盖率 74.5%，仍为候选版本。
+- 全套 20 项 Python 测试、语法、产物行数/唯一性/贡献聚合与加法合同通过；本轮无前端改动，未重复 Playwright。
+- 妙搭按名称检索仍缺 `spark:app:read` 用户授权，无法安全判断同名应用是否存在，未创建或发布应用。
+
+下一项唯一优先事项：完成妙搭 `spark:app:read` 用户授权后，按名称检索并仅在确认无同名应用时创建唯一 full_stack 开发态应用。
 
 ### 2026-10-12：P10/P50/P90 经验分位区间与覆盖率报告
 

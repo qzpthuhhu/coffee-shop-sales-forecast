@@ -4,11 +4,15 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from lightgbm import LGBMRegressor
 
 from backtest_pipeline import (
     HISTORY_FEATURE_COLS,
+    SHAP_ADDITIVITY_TOLERANCE,
     add_origin_safe_baselines,
+    add_prediction_identity,
     build_quality_report,
+    explain_tree_predictions,
     recursive_forecast,
     select_backtest_origins,
 )
@@ -52,11 +56,16 @@ class RollingBacktestTest(unittest.TestCase):
         predictions = pd.read_csv(
             report_dir / "rolling_backtest_predictions.csv"
         )
+        contributions = pd.read_csv(
+            report_dir / "rolling_backtest_shap.csv.gz"
+        )
         quality = pd.read_csv(report_dir / "rolling_backtest_quality.csv")
         metadata = json.loads(
             (report_dir / "rolling_backtest_run.json").read_text(encoding="utf-8")
         )
 
+        self.assertEqual(predictions["prediction_id"].nunique(), len(predictions))
+        self.assertEqual(predictions["model_run_id"].nunique(), 1)
         self.assertTrue(
             {"pred_p10", "pred_p50", "pred_p90"}.issubset(predictions.columns)
         )
@@ -72,6 +81,117 @@ class RollingBacktestTest(unittest.TestCase):
         self.assertEqual(
             metadata["quantile_levels"],
             {"pred_p10": 0.1, "pred_p50": 0.5, "pred_p90": 0.9},
+        )
+        feature_count = metadata["feature_count"]
+        self.assertEqual(len(contributions), len(predictions) * feature_count)
+        self.assertEqual(
+            contributions.groupby("prediction_id").size().nunique(),
+            1,
+        )
+        self.assertEqual(
+            contributions.groupby("prediction_id").size().iloc[0],
+            feature_count,
+        )
+        self.assertTrue(
+            set(contributions["prediction_id"]) == set(predictions["prediction_id"])
+        )
+        self.assertEqual(
+            set(contributions["direction"]),
+            {"increase", "decrease", "neutral"},
+        )
+        contribution_sums = contributions.groupby("prediction_id")[
+            "shap_contribution"
+        ].sum()
+        persisted_sums = predictions.set_index("prediction_id")["shap_sum"]
+        np.testing.assert_allclose(
+            contribution_sums.sort_index(),
+            persisted_sums.sort_index(),
+            atol=SHAP_ADDITIVITY_TOLERANCE,
+            rtol=0,
+        )
+        self.assertLessEqual(
+            predictions["shap_additivity_error"].abs().max(),
+            SHAP_ADDITIVITY_TOLERANCE,
+        )
+        reconstructed = (
+            predictions["base_value"]
+            + predictions["shap_sum"]
+            + predictions["postprocess_adjustment"]
+        )
+        np.testing.assert_allclose(
+            reconstructed,
+            predictions["pred_lightgbm"],
+            atol=SHAP_ADDITIVITY_TOLERANCE,
+            rtol=0,
+        )
+        self.assertEqual(
+            metadata["artifacts"]["shap_contributions"],
+            "reports/model_quality/rolling_backtest_shap.csv.gz",
+        )
+
+    def test_prediction_ids_are_stable_and_entity_specific(self):
+        frame = pd.DataFrame(
+            {
+                "date": pd.to_datetime(["2023-06-24", "2023-06-24"]),
+                "store_id": [3, 3],
+                "product_id": [1, 2],
+            }
+        )
+
+        first = add_prediction_identity(
+            frame,
+            "rolling_backtest_example",
+            pd.Timestamp("2023-06-24"),
+        )
+        second = add_prediction_identity(
+            frame,
+            "rolling_backtest_example",
+            pd.Timestamp("2023-06-24"),
+        )
+
+        self.assertEqual(first["prediction_id"].nunique(), 2)
+        pd.testing.assert_series_equal(
+            first["prediction_id"],
+            second["prediction_id"],
+        )
+
+    def test_tree_shap_preserves_signed_row_level_additivity(self):
+        features = pd.DataFrame(
+            {
+                "lag": np.arange(40, dtype=float),
+                "rain": np.tile([0.0, 1.0], 20),
+            }
+        )
+        target = 2.5 + features["lag"] * 0.4 - features["rain"] * 1.5
+        model = LGBMRegressor(
+            n_estimators=30,
+            num_leaves=7,
+            min_child_samples=2,
+            random_state=42,
+            verbosity=-1,
+        ).fit(features, target)
+        sample = features.iloc[-6:].reset_index(drop=True)
+        prediction_ids = [f"prediction_{index}" for index in range(len(sample))]
+
+        summary, contributions = explain_tree_predictions(
+            model,
+            sample,
+            prediction_ids,
+            list(sample.columns),
+        )
+
+        self.assertEqual(len(summary), len(sample))
+        self.assertEqual(len(contributions), len(sample) * len(sample.columns))
+        self.assertGreater(contributions["shap_contribution"].max(), 0)
+        self.assertLess(contributions["shap_contribution"].min(), 0)
+        self.assertTrue(
+            {"increase", "decrease"}.issubset(set(contributions["direction"]))
+        )
+        np.testing.assert_allclose(
+            summary["base_value"] + summary["shap_sum"],
+            model.predict(sample),
+            atol=SHAP_ADDITIVITY_TOLERANCE,
+            rtol=0,
         )
 
     def test_origins_are_fixed_non_overlapping_windows(self):

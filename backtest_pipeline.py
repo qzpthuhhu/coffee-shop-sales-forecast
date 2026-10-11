@@ -7,6 +7,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import shap
 from lightgbm import LGBMRegressor, early_stopping, log_evaluation
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
@@ -26,6 +27,7 @@ from predict_pipeline import (
 
 REPORT_DIR = DATA_DIR / "reports" / "model_quality"
 BACKTEST_WINDOW_COUNT = 5
+PIPELINE_VERSION = "rolling-backtest-v3-prediction-shap"
 ENTITY_KEYS = ["store_id", "product_id"]
 HISTORY_FEATURE_COLS = (
     [f"qty_lag_{lag}" for lag in HISTORY_LAGS]
@@ -47,6 +49,102 @@ QUANTILE_LEVELS = {
     "pred_p50": 0.50,
     "pred_p90": 0.90,
 }
+SHAP_ADDITIVITY_TOLERANCE = 1e-6
+
+
+def build_model_run_id(
+    source_hashes,
+    origins,
+    horizon,
+    feature_cols,
+):
+    """Build a stable model-run identifier from reproducibility inputs."""
+    run_contract = {
+        "pipeline_version": PIPELINE_VERSION,
+        "source_hashes": source_hashes,
+        "origins": [pd.Timestamp(origin).date().isoformat() for origin in origins],
+        "horizon": horizon,
+        "features": feature_cols,
+        "parameters": LIGHTGBM_PARAMS,
+        "quantile_levels": QUANTILE_LEVELS,
+    }
+    digest = hashlib.sha256(
+        json.dumps(run_contract, sort_keys=True).encode("utf-8")
+    ).hexdigest()[:16]
+    return f"rolling_backtest_{digest}"
+
+
+def add_prediction_identity(frame, model_run_id, origin):
+    """Attach stable identifiers for each store-SKU-date prediction."""
+    result = frame.copy()
+    origin_key = pd.Timestamp(origin).strftime("%Y%m%d")
+    date_keys = result["date"].dt.strftime("%Y%m%d")
+    result["model_run_id"] = model_run_id
+    result["prediction_id"] = (
+        model_run_id
+        + "_o"
+        + origin_key
+        + "_d"
+        + date_keys
+        + "_s"
+        + result["store_id"].astype(str)
+        + "_sku"
+        + result["product_id"].astype(str)
+    )
+    if result["prediction_id"].duplicated().any():
+        raise ValueError("Prediction identifiers must be unique within a forecast")
+    return result
+
+
+def explain_tree_predictions(model, feature_frame, prediction_ids, feature_cols):
+    """Return row-level TreeSHAP summaries and signed long-form contributions."""
+    explainer = shap.TreeExplainer(model)
+    shap_values = np.asarray(explainer.shap_values(feature_frame), dtype=float)
+    if shap_values.ndim != 2 or shap_values.shape != feature_frame.shape:
+        raise ValueError(
+            "Expected one TreeSHAP contribution per prediction and feature"
+        )
+
+    expected_value = np.asarray(explainer.expected_value, dtype=float).reshape(-1)
+    if expected_value.size != 1:
+        raise ValueError("Expected a single base value for the regression model")
+    base_values = np.full(len(feature_frame), expected_value.item())
+    model_outputs = np.asarray(model.predict(feature_frame), dtype=float)
+    shap_sums = shap_values.sum(axis=1)
+    additivity_errors = base_values + shap_sums - model_outputs
+    max_error = float(np.max(np.abs(additivity_errors), initial=0))
+    if max_error > SHAP_ADDITIVITY_TOLERANCE:
+        raise ValueError(
+            "TreeSHAP additivity validation failed: "
+            f"max error={max_error:.8f}"
+        )
+
+    ids = pd.Series(prediction_ids, dtype="object").reset_index(drop=True)
+    summary = pd.DataFrame(
+        {
+            "prediction_id": ids,
+            "base_value": base_values,
+            "shap_sum": shap_sums,
+            "shap_additivity_error": additivity_errors,
+        }
+    )
+    contributions = pd.DataFrame(
+        {
+            "prediction_id": np.repeat(ids.to_numpy(), len(feature_cols)),
+            "feature": np.tile(np.asarray(feature_cols, dtype=object), len(ids)),
+            "feature_value": feature_frame[feature_cols].to_numpy().reshape(-1),
+            "shap_contribution": shap_values.reshape(-1),
+        }
+    )
+    contributions["direction"] = np.select(
+        [
+            contributions["shap_contribution"] > 0,
+            contributions["shap_contribution"] < 0,
+        ],
+        ["increase", "decrease"],
+        default="neutral",
+    )
+    return summary, contributions
 
 
 def select_backtest_origins(
@@ -116,12 +214,18 @@ def recursive_forecast(
     origin,
     horizon,
     quantile_models=None,
+    model_run_id=None,
+    include_explanations=False,
 ):
     """Forecast one day at a time without reading labels at or after origin."""
+    if include_explanations and not model_run_id:
+        raise ValueError("model_run_id is required when explanations are enabled")
+
     forecast_dates = pd.date_range(origin, periods=horizon, freq="D")
     state = df[["date", *ENTITY_KEYS, "qty"]].copy()
     state.loc[state["date"] >= origin, "qty"] = np.nan
     forecast_rows = []
+    explanation_rows = []
 
     for forecast_date in forecast_dates:
         history = add_history_features(state[state["date"] <= forecast_date].copy())
@@ -136,11 +240,31 @@ def recursive_forecast(
             validate="one_to_one",
         )
         current = current.sort_values(ENTITY_KEYS).reset_index(drop=True)
+        current["pred_lightgbm_raw"] = model.predict(current[feature_cols])
         current["pred_lightgbm"] = np.clip(
-            model.predict(current[feature_cols]),
+            current["pred_lightgbm_raw"],
             a_min=0,
             a_max=None,
         )
+        current["postprocess_adjustment"] = (
+            current["pred_lightgbm"] - current["pred_lightgbm_raw"]
+        )
+        if model_run_id:
+            current = add_prediction_identity(current, model_run_id, origin)
+        if include_explanations:
+            explanation_summary, contributions = explain_tree_predictions(
+                model,
+                current[feature_cols],
+                current["prediction_id"],
+                feature_cols,
+            )
+            current = current.merge(
+                explanation_summary,
+                on="prediction_id",
+                how="left",
+                validate="one_to_one",
+            )
+            explanation_rows.append(contributions)
         if quantile_models:
             quantiles = np.column_stack(
                 [
@@ -168,7 +292,10 @@ def recursive_forecast(
         )
         state.loc[update_index, "qty"] = state_today["qty"].to_numpy()
 
-    return pd.concat(forecast_rows, ignore_index=True)
+    forecasts = pd.concat(forecast_rows, ignore_index=True)
+    if include_explanations:
+        return forecasts, pd.concat(explanation_rows, ignore_index=True)
+    return forecasts
 
 
 def add_origin_safe_baselines(forecast_df, df, origin):
@@ -321,7 +448,18 @@ def run_rolling_backtest(
         window_count=window_count,
         horizon=horizon,
     )
+    source_hashes = {
+        SALES_FILE.name: _sha256(SALES_FILE),
+        WEATHER_FILE.name: _sha256(WEATHER_FILE),
+    }
+    run_id = build_model_run_id(
+        source_hashes,
+        origins,
+        horizon,
+        feature_cols,
+    )
     all_predictions = []
+    all_shap_contributions = []
     training_runs = []
 
     for origin in origins:
@@ -332,18 +470,23 @@ def run_rolling_backtest(
             origin,
             horizon,
         )
-        forecast = recursive_forecast(
+        forecast, shap_contributions = recursive_forecast(
             model,
             df,
             feature_cols,
             origin,
             horizon,
             quantile_models=quantile_models,
+            model_run_id=run_id,
+            include_explanations=True,
         )
         forecast = add_origin_safe_baselines(forecast, df, origin)
         forecast["forecast_origin"] = origin
         forecast["horizon_day"] = (forecast["date"] - origin).dt.days + 1
+        forecast["prediction_error"] = forecast["qty"] - forecast["pred_lightgbm"]
+        forecast["absolute_error"] = forecast["prediction_error"].abs()
         all_predictions.append(forecast)
+        all_shap_contributions.append(shap_contributions)
         training_runs.append(
             {
                 "forecast_origin": origin.date().isoformat(),
@@ -360,16 +503,19 @@ def run_rolling_backtest(
         )
 
     predictions = pd.concat(all_predictions, ignore_index=True)
+    shap_contributions = pd.concat(all_shap_contributions, ignore_index=True)
     quality, model_is_candidate = build_quality_report(predictions)
     generated_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
-    run_id = f"rolling_backtest_{datetime.now(timezone.utc):%Y%m%dT%H%M%SZ}"
 
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     prediction_path = output_dir / "rolling_backtest_predictions.csv"
+    shap_path = output_dir / "rolling_backtest_shap.csv.gz"
     quality_path = output_dir / "rolling_backtest_quality.csv"
     metadata_path = output_dir / "rolling_backtest_run.json"
     prediction_columns = [
+        "prediction_id",
+        "model_run_id",
         "forecast_origin",
         "horizon_day",
         "date",
@@ -379,14 +525,27 @@ def run_rolling_backtest(
         "category",
         "product_type",
         "qty",
+        "prediction_error",
+        "absolute_error",
+        "pred_lightgbm_raw",
         *PREDICTION_COLUMNS.values(),
+        "postprocess_adjustment",
         *QUANTILE_LEVELS,
+        "base_value",
+        "shap_sum",
+        "shap_additivity_error",
     ]
     predictions[prediction_columns].to_csv(prediction_path, index=False)
+    shap_contributions.to_csv(
+        shap_path,
+        index=False,
+        compression={"method": "gzip", "compresslevel": 6, "mtime": 0},
+    )
     quality.to_csv(quality_path, index=False)
 
     metadata = {
         "run_id": run_id,
+        "pipeline_version": PIPELINE_VERSION,
         "generated_at": generated_at,
         "model_name": "Global LightGBM (lightgbm.LGBMRegressor)",
         "candidate_status": "candidate" if model_is_candidate else "rejected",
@@ -413,18 +572,31 @@ def run_rolling_backtest(
             },
         },
         "training_runs": training_runs,
-        "source_hashes": {
-            SALES_FILE.name: _sha256(SALES_FILE),
-            WEATHER_FILE.name: _sha256(WEATHER_FILE),
+        "source_hashes": source_hashes,
+        "prediction_explanations": {
+            "method": "TreeSHAP",
+            "additivity_target": "pred_lightgbm_raw",
+            "additivity_tolerance": SHAP_ADDITIVITY_TOLERANCE,
+            "row_count": len(predictions),
+            "contribution_count": len(shap_contributions),
+            "features_per_prediction": len(feature_cols),
+            "maximum_absolute_additivity_error": float(
+                predictions["shap_additivity_error"].abs().max()
+            ),
+            "postprocessing": (
+                "pred_lightgbm = max(0, pred_lightgbm_raw); "
+                "postprocess_adjustment is stored separately from SHAP"
+            ),
         },
         "artifacts": {
             "predictions": str(prediction_path.relative_to(DATA_DIR)),
+            "shap_contributions": str(shap_path.relative_to(DATA_DIR)),
             "quality_report": str(quality_path.relative_to(DATA_DIR)),
         },
         "limitations": [
             "P10/P50/P90 are empirical LightGBM quantiles and are not causal or conformally calibrated.",
             "This retrospective backtest covers five fixed seven-day origins only.",
-            "SHAP explanations are not included in this backtest artifact.",
+            "TreeSHAP explains model output and feature association, not causal business impact.",
         ],
     }
     metadata_path.write_text(

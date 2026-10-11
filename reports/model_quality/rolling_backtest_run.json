@@ -1,6 +1,7 @@
 {
-  "run_id": "rolling_backtest_20261011T210440Z",
-  "generated_at": "2026-10-11T21:04:40+00:00",
+  "run_id": "rolling_backtest_6ca113527c1a53a1",
+  "pipeline_version": "rolling-backtest-v3-prediction-shap",
+  "generated_at": "2026-10-11T22:08:25+00:00",
   "model_name": "Global LightGBM (lightgbm.LGBMRegressor)",
   "candidate_status": "candidate",
   "candidate_rule": "Aggregate LightGBM MAE and WAPE must both beat the best origin-safe baseline",
@@ -174,13 +175,24 @@
     "Coffee Shop Sales.xlsx": "287d06d19f7a832d48f1deea7b149836fb32d591010f060bdcf8d1959653bfe1",
     "nyc_weather_2023_h1.csv": "114d17a5c0993ade0ccdb99ee46971cfe5e627473f0aad7c75155382d5249f05"
   },
+  "prediction_explanations": {
+    "method": "TreeSHAP",
+    "additivity_target": "pred_lightgbm_raw",
+    "additivity_tolerance": 1e-06,
+    "row_count": 8400,
+    "contribution_count": 369600,
+    "features_per_prediction": 44,
+    "maximum_absolute_additivity_error": 6.52811138479592e-14,
+    "postprocessing": "pred_lightgbm = max(0, pred_lightgbm_raw); postprocess_adjustment is stored separately from SHAP"
+  },
   "artifacts": {
     "predictions": "reports/model_quality/rolling_backtest_predictions.csv",
+    "shap_contributions": "reports/model_quality/rolling_backtest_shap.csv.gz",
     "quality_report": "reports/model_quality/rolling_backtest_quality.csv"
   },
   "limitations": [
     "P10/P50/P90 are empirical LightGBM quantiles and are not causal or conformally calibrated.",
     "This retrospective backtest covers five fixed seven-day origins only.",
-    "SHAP explanations are not included in this backtest artifact."
+    "TreeSHAP explains model output and feature association, not causal business impact."
   ]
 }
