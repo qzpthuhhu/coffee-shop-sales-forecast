@@ -1,0 +1,149 @@
+import unittest
+
+import numpy as np
+import pandas as pd
+
+from backtest_pipeline import (
+    HISTORY_FEATURE_COLS,
+    add_origin_safe_baselines,
+    build_quality_report,
+    recursive_forecast,
+    select_backtest_origins,
+)
+from predict_pipeline import add_history_features
+
+
+def make_panel(days=49):
+    rows = []
+    for day_index, date in enumerate(pd.date_range("2023-01-01", periods=days)):
+        for product_id in (101, 102):
+            rows.append(
+                {
+                    "date": date,
+                    "store_id": 1,
+                    "store_name": "Test Store",
+                    "product_id": product_id,
+                    "category": "Coffee",
+                    "product_type": "Brewed",
+                    "qty": day_index + product_id - 100,
+                }
+            )
+    return pd.DataFrame(rows)
+
+
+class LagOneModel:
+    def predict(self, features):
+        return features["qty_lag_1"].fillna(0).to_numpy()
+
+
+class RollingBacktestTest(unittest.TestCase):
+    def test_origins_are_fixed_non_overlapping_windows(self):
+        dates = pd.date_range("2023-01-01", periods=42)
+        origins = select_backtest_origins(dates, window_count=3, horizon=7)
+
+        self.assertEqual(
+            origins,
+            [
+                pd.Timestamp("2023-01-22"),
+                pd.Timestamp("2023-01-29"),
+                pd.Timestamp("2023-02-05"),
+            ],
+        )
+
+    def test_recursive_forecast_does_not_read_future_labels(self):
+        origin = pd.Timestamp("2023-02-12")
+        source = add_history_features(make_panel())
+        candidate = source.copy()
+        candidate.loc[candidate["date"] >= origin, "qty"] += 100_000
+
+        baseline_forecast = recursive_forecast(
+            LagOneModel(),
+            source,
+            ["qty_lag_1"],
+            origin,
+            horizon=7,
+        )
+        mutated_forecast = recursive_forecast(
+            LagOneModel(),
+            candidate,
+            ["qty_lag_1"],
+            origin,
+            horizon=7,
+        )
+
+        np.testing.assert_allclose(
+            baseline_forecast["pred_lightgbm"],
+            mutated_forecast["pred_lightgbm"],
+        )
+
+    def test_all_history_features_are_rebuilt_for_each_forecast_day(self):
+        origin = pd.Timestamp("2023-02-12")
+        source = add_history_features(make_panel())
+        forecast = recursive_forecast(
+            LagOneModel(),
+            source,
+            ["qty_lag_1"],
+            origin,
+            horizon=2,
+        )
+
+        self.assertTrue(set(HISTORY_FEATURE_COLS).issubset(forecast.columns))
+        day_one = forecast[forecast["date"] == origin].sort_values("product_id")
+        day_two = forecast[
+            forecast["date"] == origin + pd.Timedelta(days=1)
+        ].sort_values("product_id")
+        np.testing.assert_allclose(
+            day_two["qty_lag_1"],
+            day_one["pred_lightgbm"],
+        )
+
+    def test_baselines_are_unchanged_when_future_labels_change(self):
+        origin = pd.Timestamp("2023-02-12")
+        source = make_panel()
+        forecast = source[source["date"] >= origin].head(14).copy()
+
+        baseline = add_origin_safe_baselines(forecast, source, origin)
+        mutated = source.copy()
+        mutated.loc[mutated["date"] >= origin, "qty"] += 100_000
+        candidate = add_origin_safe_baselines(forecast, mutated, origin)
+
+        columns = [
+            "pred_baseline_yesterday",
+            "pred_baseline_last_week",
+            "pred_baseline_rolling_28d",
+        ]
+        pd.testing.assert_frame_equal(baseline[columns], candidate[columns])
+
+    def test_quality_report_marks_model_only_when_it_beats_baselines(self):
+        frame = pd.DataFrame(
+            {
+                "forecast_origin": pd.to_datetime(["2023-01-08"] * 4),
+                "date": pd.date_range("2023-01-08", periods=4),
+                "store_id": [1] * 4,
+                "store_name": ["Test Store"] * 4,
+                "product_id": [101] * 4,
+                "category": ["Coffee"] * 4,
+                "product_type": ["Brewed"] * 4,
+                "qty": [10, 12, 14, 16],
+                "pred_lightgbm": [10, 12, 14, 16],
+                "pred_baseline_yesterday": [8, 8, 8, 8],
+                "pred_baseline_last_week": [7, 7, 7, 7],
+                "pred_baseline_rolling_28d": [9, 9, 9, 9],
+            }
+        )
+
+        report, candidate = build_quality_report(frame)
+        model_overall = report[
+            (report["level"] == "overall")
+            & (report["method"] == "lightgbm")
+        ].iloc[0]
+
+        self.assertTrue(candidate)
+        self.assertTrue(model_overall["candidate_eligible"])
+        self.assertEqual(model_overall["wape"], 0)
+        self.assertTrue(np.isnan(model_overall["interval_coverage"]))
+        self.assertEqual(model_overall["interval_status"], "not_available")
+
+
+if __name__ == "__main__":
+    unittest.main()

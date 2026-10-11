@@ -1,0 +1,138 @@
+{
+  "run_id": "rolling_backtest_20261011T200507Z",
+  "generated_at": "2026-10-11T20:05:07+00:00",
+  "model_name": "Global LightGBM (lightgbm.LGBMRegressor)",
+  "candidate_status": "candidate",
+  "candidate_rule": "Aggregate LightGBM MAE and WAPE must both beat the best origin-safe baseline",
+  "data_range": {
+    "start": "2023-01-01",
+    "end": "2023-06-30"
+  },
+  "forecast_horizon_days": 7,
+  "backtest_window_count": 5,
+  "origins": [
+    "2023-05-27",
+    "2023-06-03",
+    "2023-06-10",
+    "2023-06-17",
+    "2023-06-24"
+  ],
+  "feature_count": 44,
+  "features": [
+    "price",
+    "qty_lag_1",
+    "qty_lag_2",
+    "qty_lag_3",
+    "qty_lag_7",
+    "qty_lag_14",
+    "qty_lag_28",
+    "qty_roll_mean_7d",
+    "qty_roll_std_7d",
+    "qty_roll_mean_14d",
+    "qty_roll_std_14d",
+    "qty_roll_mean_28d",
+    "qty_roll_std_28d",
+    "qty_dow_avg",
+    "sku_share_28d",
+    "day_of_week",
+    "is_weekend",
+    "month",
+    "day_of_month",
+    "week_of_month",
+    "is_month_start",
+    "is_month_end",
+    "season_code",
+    "week_of_season",
+    "temperature_2m_max",
+    "temperature_2m_min",
+    "temperature_2m_mean",
+    "precipitation_sum",
+    "is_rain",
+    "is_snow",
+    "is_clear",
+    "sunshine_duration",
+    "wind_speed_10m_max",
+    "relative_humidity_2m_mean",
+    "is_holiday_detailed",
+    "is_pre_holiday_1d",
+    "is_pre_holiday_3d",
+    "is_post_holiday_1d",
+    "is_long_weekend",
+    "holiday_impact_code",
+    "temp_range",
+    "is_hot",
+    "is_cold",
+    "price_vs_category_avg"
+  ],
+  "parameters": {
+    "objective": "regression_l1",
+    "n_estimators": 1000,
+    "learning_rate": 0.03,
+    "num_leaves": 63,
+    "max_depth": -1,
+    "min_child_samples": 20,
+    "subsample": 0.9,
+    "subsample_freq": 1,
+    "colsample_bytree": 0.9,
+    "reg_alpha": 0.05,
+    "reg_lambda": 0.1,
+    "random_state": 42,
+    "n_jobs": 1,
+    "verbosity": -1
+  },
+  "training_runs": [
+    {
+      "forecast_origin": "2023-05-27",
+      "fit_start": "2023-01-29",
+      "fit_end": "2023-05-19",
+      "early_stopping_start": "2023-05-20",
+      "early_stopping_end": "2023-05-26",
+      "best_iteration": 171
+    },
+    {
+      "forecast_origin": "2023-06-03",
+      "fit_start": "2023-01-29",
+      "fit_end": "2023-05-26",
+      "early_stopping_start": "2023-05-27",
+      "early_stopping_end": "2023-06-02",
+      "best_iteration": 245
+    },
+    {
+      "forecast_origin": "2023-06-10",
+      "fit_start": "2023-01-29",
+      "fit_end": "2023-06-02",
+      "early_stopping_start": "2023-06-03",
+      "early_stopping_end": "2023-06-09",
+      "best_iteration": 512
+    },
+    {
+      "forecast_origin": "2023-06-17",
+      "fit_start": "2023-01-29",
+      "fit_end": "2023-06-09",
+      "early_stopping_start": "2023-06-10",
+      "early_stopping_end": "2023-06-16",
+      "best_iteration": 435
+    },
+    {
+      "forecast_origin": "2023-06-24",
+      "fit_start": "2023-01-29",
+      "fit_end": "2023-06-16",
+      "early_stopping_start": "2023-06-17",
+      "early_stopping_end": "2023-06-23",
+      "best_iteration": 559
+    }
+  ],
+  "source_hashes": {
+    "Coffee Shop Sales.xlsx": "287d06d19f7a832d48f1deea7b149836fb32d591010f060bdcf8d1959653bfe1",
+    "nyc_weather_2023_h1.csv": "114d17a5c0993ade0ccdb99ee46971cfe5e627473f0aad7c75155382d5249f05"
+  },
+  "artifacts": {
+    "predictions": "reports/model_quality/rolling_backtest_predictions.csv",
+    "quality_report": "reports/model_quality/rolling_backtest_quality.csv"
+  },
+  "limitations": [
+    "P10/P50/P90 intervals are not implemented; interval coverage is unavailable.",
+    "This retrospective backtest covers five fixed seven-day origins only.",
+    "SHAP explanations are not included in this backtest artifact."
+  ]
+}
