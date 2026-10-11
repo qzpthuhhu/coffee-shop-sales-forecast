@@ -28,6 +28,42 @@ SALES_FILE = DATA_DIR / "Coffee Shop Sales.xlsx"
 WEATHER_FILE = DATA_DIR / "nyc_weather_2023_h1.csv"
 MODEL_DIR = DATA_DIR / "models"
 PREDICTION_LOOKAHEAD = 7
+HISTORY_LAGS = [1, 2, 3, 7, 14, 28]
+HISTORY_WINDOWS = [7, 14, 28]
+
+
+def add_history_features(df):
+    """Build target-derived features using observations strictly before each row."""
+    df = df.sort_values(['store_id', 'product_id', 'date']).reset_index(drop=True)
+    entity_keys = ['store_id', 'product_id']
+
+    for lag in HISTORY_LAGS:
+        df[f'qty_lag_{lag}'] = df.groupby(entity_keys)['qty'].shift(lag)
+
+    for window in HISTORY_WINDOWS:
+        qty_group = df.groupby(entity_keys)['qty']
+        shifted = qty_group.transform(lambda values: values.shift(1))
+        grouped_shifted = shifted.groupby([df[key] for key in entity_keys])
+        df[f'qty_roll_mean_{window}d'] = grouped_shifted.transform(
+            lambda values: values.rolling(window, min_periods=1).mean()
+        )
+        df[f'qty_roll_std_{window}d'] = grouped_shifted.transform(
+            lambda values: values.rolling(window, min_periods=1).std().fillna(0)
+        )
+
+    df['dow'] = df['date'].dt.dayofweek
+    df['qty_dow_avg'] = df.groupby(entity_keys + ['dow'])['qty'].transform(
+        lambda values: values.shift(1).expanding(min_periods=1).mean()
+    )
+
+    store_day_total = df.groupby(['store_id', 'date'])['qty'].transform('sum')
+    df['_observed_sku_share'] = (
+        df['qty'] / store_day_total.replace(0, np.nan)
+    ).fillna(0)
+    df['sku_share_28d'] = df.groupby(entity_keys)['_observed_sku_share'].transform(
+        lambda values: values.shift(1).rolling(28, min_periods=1).mean()
+    )
+    return df.drop(columns=['_observed_sku_share'])
 
 # ============================================================
 # 1. 数据加载与预处理
@@ -75,24 +111,9 @@ def load_and_preprocess():
     print(f"  聚合后数据: {len(df):,} 行 ({df['date'].nunique()} 天 x {df['store_id'].nunique()} 店 x {df['product_id'].nunique()} SKU)")
 
     # --- 特征工程 ---
-    df = df.sort_values(['store_id', 'product_id', 'date']).reset_index(drop=True)
-
     # 第一梯队：时序核心
     print("  构造时序特征...")
-    for lag in [1, 2, 3, 7, 14]:
-        df[f'qty_lag_{lag}'] = df.groupby(['store_id', 'product_id'])['qty'].shift(lag)
-
-    for w in [7, 14, 30]:
-        grp = df.groupby(['store_id', 'product_id'])['qty']
-        df[f'qty_roll_mean_{w}d'] = grp.transform(lambda x: x.shift(1).rolling(w, min_periods=1).mean())
-        df[f'qty_roll_std_{w}d'] = grp.transform(lambda x: x.shift(1).rolling(w, min_periods=1).std().fillna(0))
-
-    df['dow'] = df['date'].dt.dayofweek
-    df['qty_dow_avg'] = df.groupby(['store_id', 'product_id', 'dow'])['qty'].transform('mean')
-
-    store_day_total = df.groupby(['store_id', 'date'])['qty'].transform('sum')
-    df['sku_share'] = df['qty'] / store_day_total.replace(0, np.nan)
-    df['sku_share'] = df['sku_share'].fillna(0)
+    df = add_history_features(df)
 
     # 第二梯队：日历（含节假日增强）
     df['day_of_week'] = df['date'].dt.dayofweek
@@ -271,8 +292,17 @@ def shap_explain(model, X_sample, feature_cols):
     print("=" * 60)
 
     print("  计算 TreeSHAP (sampled)...")
-    explainer = shap.TreeExplainer(model, X_sample.iloc[:500])
-    shap_values = explainer.shap_values(X_sample.iloc[:500])
+    explain_data = X_sample.iloc[:500]
+    explainer = shap.TreeExplainer(model)
+    shap_values = explainer.shap_values(explain_data)
+    base_value = float(np.asarray(explainer.expected_value).reshape(-1)[0])
+    reconstructed = base_value + np.asarray(shap_values).sum(axis=1)
+    max_additivity_error = np.max(np.abs(reconstructed - model.predict(explain_data)))
+    if max_additivity_error > 1e-6:
+        raise ValueError(
+            f"TreeSHAP additivity validation failed: max error={max_additivity_error:.8f}"
+        )
+    print(f"  SHAP 加法校验通过，最大误差={max_additivity_error:.2e}")
 
     importance = np.abs(shap_values).mean(axis=0)
     feat_imp = pd.DataFrame({
@@ -425,14 +455,7 @@ def run_pipeline():
 
     # 7. SHAP
     X_sample = X_train.sample(min(2000, len(X_train)), random_state=42)
-    try:
-        feat_imp, shap_values, explainer = shap_explain(hgb_model, X_sample, feature_cols)
-    except Exception as e:
-        print(f"\n  SHAP 计算跳过（样本过大）: {e}")
-        feat_imp = pd.DataFrame({
-            'feature': feature_cols,
-            'shap_importance': [0] * len(feature_cols)
-        })
+    feat_imp, shap_values, explainer = shap_explain(hgb_model, X_sample, feature_cols)
 
     # 8. 根因分析
     llm_root_cause_analysis(result_df, feat_imp)
