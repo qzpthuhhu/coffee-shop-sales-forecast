@@ -153,6 +153,15 @@ FEATURE_LABELS = {
     "is_hot": "是否高温",
     "is_cold": "是否低温",
     "price_vs_category_avg": "相对品类均价",
+    "store_id_feature": "门店差异",
+    "product_id_feature": "商品差异",
+    "category_code": "品类差异",
+    "product_type_code": "商品类型差异",
+    "forecast_horizon": "预测提前天数",
+    "is_sparse": "是否稀疏品",
+    "zero_rate": "历史零销量率",
+    "adi": "平均需求间隔（天）",
+    "mean_qty": "历史日均销量",
 }
 
 
@@ -220,6 +229,8 @@ def _feature_category(feature):
         return "节假日"
     if feature in {"price", "price_vs_category_avg"}:
         return "商品"
+    if feature in {"is_sparse", "zero_rate", "adi", "mean_qty"}:
+        return "稀疏需求"
     return "日历"
 
 
@@ -246,6 +257,7 @@ def _business_explanation(feature, contribution):
         "节假日": "节假日及前后窗口",
         "商品": "商品价格与品类位置",
         "日历": "预测日日历位置",
+        "稀疏需求": "该 SKU 历史销售稀疏程度",
     }[category]
     return (
         f"模型根据{context}，将该因素与基准值相比识别为{direction}销量的信号；"
@@ -587,11 +599,11 @@ def build_dashboard_payload(
         "category": "其他",
         "increase_explanation": (
             "为保证瀑布图与原始模型输出可核对，其余较小贡献合并展示；"
-            "完整 44 项明细保留在回测 SHAP 产物中。"
+            f"完整 {run_metadata['feature_count']} 项明细保留在回测 SHAP 产物中。"
         ),
         "decrease_explanation": (
             "为保证瀑布图与原始模型输出可核对，其余较小贡献合并展示；"
-            "完整 44 项明细保留在回测 SHAP 产物中。"
+            f"完整 {run_metadata['feature_count']} 项明细保留在回测 SHAP 产物中。"
         ),
     }
     return {

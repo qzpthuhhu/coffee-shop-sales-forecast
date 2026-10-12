@@ -1,54 +1,13 @@
 {
-  "run_id": "rolling_backtest_1d29501e6d1f62da",
-  "pipeline_version": "rolling-backtest-v7-kalman-candidate",
-  "generated_at": "2026-10-12T08:08:57+00:00",
-  "model_name": "Global LightGBM (lightgbm.LGBMRegressor)",
+  "run_id": "sparse_production_4616e0b45d763474",
+  "pipeline_version": "direct-tweedie-sparse-v1",
+  "pipeline": "production_sparse",
+  "method": "direct_tweedie_1_3_sparse",
+  "model_name": "Global LightGBM (direct Tweedie + sparse labels)",
   "candidate_status": "candidate",
-  "candidate_rule": "Aggregate LightGBM MAE and WAPE must both beat the best origin-safe baseline",
+  "candidate_rule": "Aggregate model MAE and WAPE must both beat the best origin-safe baseline",
   "selected_point_forecast": "pred_lightgbm",
-  "kalman_candidate_status": "experimental",
-  "kalman_promotion_rule": "Fusion must improve aggregate MAE and WAPE, not increase absolute mean error, and beat LightGBM MAE in at least three of five windows",
-  "kalman_fusion_window_wins": 0,
-  "kalman": {
-    "method": "Per-store-SKU damped local-linear-trend Kalman filter with shrunk weekday seasonal offsets",
-    "parameters": {
-      "history_days": 56,
-      "seasonal_shrinkage": 0.5,
-      "level_process_ratio": 0.15,
-      "trend_process_ratio": 0.01,
-      "trend_damping": 0.9,
-      "minimum_variance": 1.0
-    },
-    "candidate_weights": [
-      0.0,
-      0.1,
-      0.2,
-      0.30000000000000004,
-      0.4,
-      0.5,
-      0.6000000000000001,
-      0.7000000000000001,
-      0.8,
-      0.9,
-      1.0
-    ],
-    "weight_selection": "Minimum MAE on the seven-day pre-origin calibration window; ties prefer the lower Kalman weight",
-    "future_label_access": false
-  },
-  "data_range": {
-    "start": "2023-01-01",
-    "end": "2023-06-30"
-  },
-  "forecast_horizon_days": 7,
-  "backtest_window_count": 5,
-  "origins": [
-    "2023-05-27",
-    "2023-06-03",
-    "2023-06-10",
-    "2023-06-17",
-    "2023-06-24"
-  ],
-  "feature_count": 44,
+  "feature_count": 53,
   "features": [
     "price",
     "qty_lag_1",
@@ -93,10 +52,183 @@
     "temp_range",
     "is_hot",
     "is_cold",
-    "price_vs_category_avg"
+    "price_vs_category_avg",
+    "store_id_feature",
+    "product_id_feature",
+    "category_code",
+    "product_type_code",
+    "forecast_horizon",
+    "is_sparse",
+    "zero_rate",
+    "adi",
+    "mean_qty"
   ],
+  "sparse_sku_count": 77,
+  "data_range": {
+    "start": "2023-01-01",
+    "end": "2023-06-30"
+  },
+  "forecast_horizon_days": 7,
+  "origins": [
+    "2023-05-27",
+    "2023-06-03",
+    "2023-06-10",
+    "2023-06-17",
+    "2023-06-24"
+  ],
+  "backtest_window_count": 5,
+  "generated_at": "2026-10-12T10:00:26.731882+00:00",
+  "prediction_count": 8400,
+  "overall": {
+    "mae": 2.410638897099491,
+    "wape": 0.3471994570768445,
+    "rmse": 3.6355131741746995,
+    "r2": 0.6609679123810714
+  },
+  "coverage_p10_p90": 0.8055952380952381,
+  "training_runs": [
+    {
+      "forecast_origin": "2023-05-27",
+      "method": "direct_tweedie_1_3_sparse",
+      "feature_count": 53,
+      "best_iteration": 209,
+      "quantile_best_iterations": {
+        "pred_p10": 479,
+        "pred_p50": 409,
+        "pred_p90": 90
+      },
+      "conformal_adjustment": 0.007207305825432497,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.0719071230042658
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.1162446694264514
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.032465811835018
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-03",
+      "method": "direct_tweedie_1_3_sparse",
+      "feature_count": 53,
+      "best_iteration": 280,
+      "quantile_best_iterations": {
+        "pred_p10": 321,
+        "pred_p50": 240,
+        "pred_p90": 349
+      },
+      "conformal_adjustment": 1.3468482903010592e-14,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.1072771790752411
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0718743624304135
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.0238961845863117
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-10",
+      "method": "direct_tweedie_1_3_sparse",
+      "feature_count": 53,
+      "best_iteration": 258,
+      "quantile_best_iterations": {
+        "pred_p10": 426,
+        "pred_p50": 274,
+        "pred_p90": 504
+      },
+      "conformal_adjustment": 5.6955605857155344e-27,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.0843888434804732
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.061379412497439
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.093298557083718
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-17",
+      "method": "direct_tweedie_1_3_sparse",
+      "feature_count": 53,
+      "best_iteration": 591,
+      "quantile_best_iterations": {
+        "pred_p10": 228,
+        "pred_p50": 341,
+        "pred_p90": 991
+      },
+      "conformal_adjustment": 0.029955239055938974,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.0278808989210817
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0276992734343282
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.0776656553748998
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-24",
+      "method": "direct_tweedie_1_3_sparse",
+      "feature_count": 53,
+      "best_iteration": 231,
+      "quantile_best_iterations": {
+        "pred_p10": 540,
+        "pred_p50": 544,
+        "pred_p90": 333
+      },
+      "conformal_adjustment": 1.0272246026762466e-15,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.0514902048593318
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0429154396342186
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.0345202806752352
+        }
+      ]
+    }
+  ],
+  "source_hashes": {
+    "Coffee Shop Sales.xlsx": "287d06d19f7a832d48f1deea7b149836fb32d591010f060bdcf8d1959653bfe1",
+    "nyc_weather_2023_h1.csv": "114d17a5c0993ade0ccdb99ee46971cfe5e627473f0aad7c75155382d5249f05"
+  },
+  "quantile_levels": {
+    "pred_p10": 0.1,
+    "pred_p50": 0.5,
+    "pred_p90": 0.9
+  },
   "parameters": {
-    "objective": "regression_l1",
+    "objective": "tweedie",
     "n_estimators": 1000,
     "learning_rate": 0.03,
     "num_leaves": 63,
@@ -109,12 +241,8 @@
     "reg_lambda": 0.1,
     "random_state": 42,
     "n_jobs": 1,
-    "verbosity": -1
-  },
-  "quantile_levels": {
-    "pred_p10": 0.1,
-    "pred_p50": 0.5,
-    "pred_p90": 0.9
+    "verbosity": -1,
+    "tweedie_variance_power": 1.3
   },
   "store_bias_calibration": {
     "method": "store aggregate actual-to-predicted ratio",
@@ -155,526 +283,16 @@
       "verbosity": -1
     }
   },
-  "training_runs": [
-    {
-      "forecast_origin": "2023-05-27",
-      "fit_start": "2023-01-29",
-      "fit_end": "2023-05-12",
-      "early_stopping_start": "2023-05-13",
-      "early_stopping_end": "2023-05-19",
-      "calibration_start": "2023-05-20",
-      "calibration_end": "2023-05-26",
-      "calibration_sample_count": 1680,
-      "store_bias_factors": [
-        {
-          "store_id": 3,
-          "calibration_actual": 3672,
-          "calibration_prediction": 3199.121005042482,
-          "calibration_sample_count": 560,
-          "store_bias_ratio_raw": 1.1478152887034163,
-          "store_bias_factor": 1.0739076443517082
-        },
-        {
-          "store_id": 5,
-          "calibration_actual": 4304,
-          "calibration_prediction": 3388.309851619282,
-          "calibration_sample_count": 560,
-          "store_bias_ratio_raw": 1.270249826161296,
-          "store_bias_factor": 1.135124913080648
-        },
-        {
-          "store_id": 8,
-          "calibration_actual": 3510,
-          "calibration_prediction": 3273.570246772719,
-          "calibration_sample_count": 560,
-          "store_bias_ratio_raw": 1.0722238215173074,
-          "store_bias_factor": 1.0361119107586538
-        }
-      ],
-      "kalman_fusion_weight": 0.0,
-      "kalman_fusion_candidates": [
-        {
-          "weight": 0.0,
-          "mae": 2.7371451555126614,
-          "wape": 0.4003485862146327
-        },
-        {
-          "weight": 0.1,
-          "mae": 2.748009971735799,
-          "wape": 0.40193772875815276
-        },
-        {
-          "weight": 0.2,
-          "mae": 2.7685235217440463,
-          "wape": 0.4049381435251609
-        },
-        {
-          "weight": 0.30000000000000004,
-          "mae": 2.8007731335284682,
-          "wape": 0.4096551335824331
-        },
-        {
-          "weight": 0.4,
-          "mae": 2.846120062126056,
-          "wape": 0.41628780292284295
-        },
-        {
-          "weight": 0.5,
-          "mae": 2.8993128915197364,
-          "wape": 0.42406805308664086
-        },
-        {
-          "weight": 0.6000000000000001,
-          "mae": 2.9630429564846357,
-          "wape": 0.43338953220391674
-        },
-        {
-          "weight": 0.7000000000000001,
-          "mae": 3.038561257439883,
-          "wape": 0.4444352178738467
-        },
-        {
-          "weight": 0.8,
-          "mae": 3.1244048858757845,
-          "wape": 0.45699113775651384
-        },
-        {
-          "weight": 0.9,
-          "mae": 3.2173698657248737,
-          "wape": 0.47058866223383145
-        },
-        {
-          "weight": 1.0,
-          "mae": 3.316320938811012,
-          "wape": 0.48506174274791053
-        }
-      ],
-      "conformal_adjustment": 0.1044786174923864,
-      "best_iteration": 240,
-      "quantile_best_iterations": {
-        "pred_p10": 951,
-        "pred_p50": 257,
-        "pred_p90": 141
-      }
-    },
-    {
-      "forecast_origin": "2023-06-03",
-      "fit_start": "2023-01-29",
-      "fit_end": "2023-05-19",
-      "early_stopping_start": "2023-05-20",
-      "early_stopping_end": "2023-05-26",
-      "calibration_start": "2023-05-27",
-      "calibration_end": "2023-06-02",
-      "calibration_sample_count": 1680,
-      "store_bias_factors": [
-        {
-          "store_id": 3,
-          "calibration_actual": 3843,
-          "calibration_prediction": 3208.4892090681733,
-          "calibration_sample_count": 560,
-          "store_bias_ratio_raw": 1.197759989074766,
-          "store_bias_factor": 1.098879994537383
-        },
-        {
-          "store_id": 5,
-          "calibration_actual": 3527,
-          "calibration_prediction": 3457.984262399441,
-          "calibration_sample_count": 560,
-          "store_bias_ratio_raw": 1.0199583723821433,
-          "store_bias_factor": 1.0099791861910716
-        },
-        {
-          "store_id": 8,
-          "calibration_actual": 3328,
-          "calibration_prediction": 3332.3495130289757,
-          "calibration_sample_count": 560,
-          "store_bias_ratio_raw": 0.9986947608550755,
-          "store_bias_factor": 0.9993473804275377
-        }
-      ],
-      "kalman_fusion_weight": 0.0,
-      "kalman_fusion_candidates": [
-        {
-          "weight": 0.0,
-          "mae": 2.451046873555737,
-          "wape": 0.38490921177543824
-        },
-        {
-          "weight": 0.1,
-          "mae": 2.4528405446506873,
-          "wape": 0.38519088755030423
-        },
-        {
-          "weight": 0.2,
-          "mae": 2.4767435214350697,
-          "wape": 0.3889445799225011
-        },
-        {
-          "weight": 0.30000000000000004,
-          "mae": 2.5233727360281866,
-          "wape": 0.3962671711093058
-        },
-        {
-          "weight": 0.4,
-          "mae": 2.5867506015400874,
-          "wape": 0.4062199486434237
-        },
-        {
-          "weight": 0.5,
-          "mae": 2.6607595689201764,
-          "wape": 0.41784222058196824
-        },
-        {
-          "weight": 0.6000000000000001,
-          "mae": 2.742551379542927,
-          "wape": 0.43068670009647764
-        },
-        {
-          "weight": 0.7000000000000001,
-          "mae": 2.836616075912012,
-          "wape": 0.44545849761938494
-        },
-        {
-          "weight": 0.8,
-          "mae": 2.9404784615275363,
-          "wape": 0.46176891151301747
-        },
-        {
-          "weight": 0.9,
-          "mae": 3.0552161992347453,
-          "wape": 0.47978717654836156
-        },
-        {
-          "weight": 1.0,
-          "mae": 3.1795402900483074,
-          "wape": 0.49931087000197766
-        }
-      ],
-      "conformal_adjustment": 0.14309388079509766,
-      "best_iteration": 171,
-      "quantile_best_iterations": {
-        "pred_p10": 540,
-        "pred_p50": 183,
-        "pred_p90": 172
-      }
-    },
-    {
-      "forecast_origin": "2023-06-10",
-      "fit_start": "2023-01-29",
-      "fit_end": "2023-05-26",
-      "early_stopping_start": "2023-05-27",
-      "early_stopping_end": "2023-06-02",
-      "calibration_start": "2023-06-03",
-      "calibration_end": "2023-06-09",
-      "calibration_sample_count": 1680,
-      "store_bias_factors": [
-        {
-          "store_id": 3,
-          "calibration_actual": 3730,
-          "calibration_prediction": 3242.527799313422,
-          "calibration_sample_count": 560,
-          "store_bias_ratio_raw": 1.150337092187705,
-          "store_bias_factor": 1.0751685460938525
-        },
-        {
-          "store_id": 5,
-          "calibration_actual": 3573,
-          "calibration_prediction": 3359.416606625238,
-          "calibration_sample_count": 560,
-          "store_bias_ratio_raw": 1.0635775250242991,
-          "store_bias_factor": 1.0317887625121496
-        },
-        {
-          "store_id": 8,
-          "calibration_actual": 4047,
-          "calibration_prediction": 3383.9888706202064,
-          "calibration_sample_count": 560,
-          "store_bias_ratio_raw": 1.1959259190052476,
-          "store_bias_factor": 1.097962959502624
-        }
-      ],
-      "kalman_fusion_weight": 0.1,
-      "kalman_fusion_candidates": [
-        {
-          "weight": 0.0,
-          "mae": 2.543461541247942,
-          "wape": 0.37647712681026807
-        },
-        {
-          "weight": 0.1,
-          "mae": 2.5313221907494303,
-          "wape": 0.3746802890272285
-        },
-        {
-          "weight": 0.2,
-          "mae": 2.535311066641041,
-          "wape": 0.3752707129477488
-        },
-        {
-          "weight": 0.30000000000000004,
-          "mae": 2.5505325269785355,
-          "wape": 0.3775237572972634
-        },
-        {
-          "weight": 0.4,
-          "mae": 2.5783191403817836,
-          "wape": 0.38163666571289834
-        },
-        {
-          "weight": 0.5,
-          "mae": 2.61799787358125,
-          "wape": 0.3875098174111454
-        },
-        {
-          "weight": 0.6000000000000001,
-          "mae": 2.666264998939749,
-          "wape": 0.394654202486236
-        },
-        {
-          "weight": 0.7000000000000001,
-          "mae": 2.7241206950879318,
-          "wape": 0.40321786499979956
-        },
-        {
-          "weight": 0.8,
-          "mae": 2.7909437782425015,
-          "wape": 0.41310885880593856
-        },
-        {
-          "weight": 0.9,
-          "mae": 2.866623384663058,
-          "wape": 0.42431077411752754
-        },
-        {
-          "weight": 1.0,
-          "mae": 2.9524089949525725,
-          "wape": 0.43700855608108563
-        }
-      ],
-      "conformal_adjustment": 0.22122664807781156,
-      "best_iteration": 245,
-      "quantile_best_iterations": {
-        "pred_p10": 397,
-        "pred_p50": 245,
-        "pred_p90": 422
-      }
-    },
-    {
-      "forecast_origin": "2023-06-17",
-      "fit_start": "2023-01-29",
-      "fit_end": "2023-06-02",
-      "early_stopping_start": "2023-06-03",
-      "early_stopping_end": "2023-06-09",
-      "calibration_start": "2023-06-10",
-      "calibration_end": "2023-06-16",
-      "calibration_sample_count": 1680,
-      "store_bias_factors": [
-        {
-          "store_id": 3,
-          "calibration_actual": 3701,
-          "calibration_prediction": 3512.14218833627,
-          "calibration_sample_count": 560,
-          "store_bias_ratio_raw": 1.0537728262514319,
-          "store_bias_factor": 1.026886413125716
-        },
-        {
-          "store_id": 5,
-          "calibration_actual": 4003,
-          "calibration_prediction": 3586.3756238472633,
-          "calibration_sample_count": 560,
-          "store_bias_ratio_raw": 1.1161686392753822,
-          "store_bias_factor": 1.058084319637691
-        },
-        {
-          "store_id": 8,
-          "calibration_actual": 4479,
-          "calibration_prediction": 3676.67112547866,
-          "calibration_sample_count": 560,
-          "store_bias_ratio_raw": 1.2182215507286869,
-          "store_bias_factor": 1.1091107753643434
-        }
-      ],
-      "kalman_fusion_weight": 0.0,
-      "kalman_fusion_candidates": [
-        {
-          "weight": 0.0,
-          "mae": 2.644162638275376,
-          "wape": 0.3646222795947329
-        },
-        {
-          "weight": 0.1,
-          "mae": 2.671332997134392,
-          "wape": 0.36836899246374283
-        },
-        {
-          "weight": 0.2,
-          "mae": 2.7094684468549386,
-          "wape": 0.37362775923141234
-        },
-        {
-          "weight": 0.30000000000000004,
-          "mae": 2.7580510005813657,
-          "wape": 0.38032715102821096
-        },
-        {
-          "weight": 0.4,
-          "mae": 2.8219444491791243,
-          "wape": 0.3891378703620561
-        },
-        {
-          "weight": 0.5,
-          "mae": 2.901211652187445,
-          "wape": 0.40006858537920936
-        },
-        {
-          "weight": 0.6000000000000001,
-          "mae": 2.9889267741513312,
-          "wape": 0.4121642436652907
-        },
-        {
-          "weight": 0.7000000000000001,
-          "mae": 3.08232579267927,
-          "wape": 0.42504369463196046
-        },
-        {
-          "weight": 0.8,
-          "mae": 3.1825652864331486,
-          "wape": 0.4388664270875556
-        },
-        {
-          "weight": 0.9,
-          "mae": 3.2923568810539976,
-          "wape": 0.4540063662620632
-        },
-        {
-          "weight": 1.0,
-          "mae": 3.4089027497546667,
-          "wape": 0.4700777000400427
-        }
-      ],
-      "conformal_adjustment": 0.024526198261733967,
-      "best_iteration": 512,
-      "quantile_best_iterations": {
-        "pred_p10": 280,
-        "pred_p50": 310,
-        "pred_p90": 452
-      }
-    },
-    {
-      "forecast_origin": "2023-06-24",
-      "fit_start": "2023-01-29",
-      "fit_end": "2023-06-09",
-      "early_stopping_start": "2023-06-10",
-      "early_stopping_end": "2023-06-16",
-      "calibration_start": "2023-06-17",
-      "calibration_end": "2023-06-23",
-      "calibration_sample_count": 1680,
-      "store_bias_factors": [
-        {
-          "store_id": 3,
-          "calibration_actual": 3996,
-          "calibration_prediction": 3505.4122817509824,
-          "calibration_sample_count": 560,
-          "store_bias_ratio_raw": 1.1399515032234568,
-          "store_bias_factor": 1.0699757516117283
-        },
-        {
-          "store_id": 5,
-          "calibration_actual": 4154,
-          "calibration_prediction": 3738.744925506282,
-          "calibration_sample_count": 560,
-          "store_bias_ratio_raw": 1.1110680409515998,
-          "store_bias_factor": 1.0555340204758
-        },
-        {
-          "store_id": 8,
-          "calibration_actual": 3944,
-          "calibration_prediction": 3702.6206529269775,
-          "calibration_sample_count": 560,
-          "store_bias_ratio_raw": 1.0651914872462585,
-          "store_bias_factor": 1.0325957436231292
-        }
-      ],
-      "kalman_fusion_weight": 0.0,
-      "kalman_fusion_candidates": [
-        {
-          "weight": 0.0,
-          "mae": 2.7154159348381106,
-          "wape": 0.3772034703595193
-        },
-        {
-          "weight": 0.1,
-          "mae": 2.715686245382117,
-          "wape": 0.37724101969918605
-        },
-        {
-          "weight": 0.2,
-          "mae": 2.725700282372078,
-          "wape": 0.37863208817472227
-        },
-        {
-          "weight": 0.30000000000000004,
-          "mae": 2.7476889454917877,
-          "wape": 0.38168657420425034
-        },
-        {
-          "weight": 0.4,
-          "mae": 2.7813899436181284,
-          "wape": 0.3863680424407521
-        },
-        {
-          "weight": 0.5,
-          "mae": 2.8304700596357915,
-          "wape": 0.3931858525043931
-        },
-        {
-          "weight": 0.6000000000000001,
-          "mae": 2.89222523519648,
-          "wape": 0.40176437862825254
-        },
-        {
-          "weight": 0.7000000000000001,
-          "mae": 2.966617548209868,
-          "wape": 0.4120983529843375
-        },
-        {
-          "weight": 0.8,
-          "mae": 3.0536748371936646,
-          "wape": 0.42419164267284243
-        },
-        {
-          "weight": 0.9,
-          "mae": 3.1509104430475374,
-          "wape": 0.43769882126011767
-        },
-        {
-          "weight": 1.0,
-          "mae": 3.2564019945004428,
-          "wape": 0.4523528485828298
-        }
-      ],
-      "conformal_adjustment": 0.012295414170228744,
-      "best_iteration": 435,
-      "quantile_best_iterations": {
-        "pred_p10": 956,
-        "pred_p50": 851,
-        "pred_p90": 171
-      }
-    }
-  ],
-  "source_hashes": {
-    "Coffee Shop Sales.xlsx": "287d06d19f7a832d48f1deea7b149836fb32d591010f060bdcf8d1959653bfe1",
-    "nyc_weather_2023_h1.csv": "114d17a5c0993ade0ccdb99ee46971cfe5e627473f0aad7c75155382d5249f05"
-  },
   "prediction_explanations": {
-    "method": "TreeSHAP",
+    "method": "TreeSHAP with exact Tweedie log-link transformation",
     "additivity_target": "pred_lightgbm_raw",
+    "unit": "cups",
     "additivity_tolerance": 1e-06,
     "row_count": 8400,
-    "contribution_count": 369600,
-    "features_per_prediction": 44,
-    "maximum_absolute_additivity_error": 5.861977570020827e-14,
-    "postprocessing": "pred_lightgbm_model = max(0, pred_lightgbm_raw); pred_lightgbm = pred_lightgbm_model * the pre-origin store bias factor; postprocess_adjustment and store_bias_adjustment are stored separately from SHAP"
+    "contribution_count": 445200,
+    "features_per_prediction": 53,
+    "maximum_absolute_additivity_error": 7.460698725481052e-14,
+    "postprocessing": "pred_lightgbm_model = max(0, pred_lightgbm_raw); pred_lightgbm = pred_lightgbm_model * the pre-origin store bias factor; adjustments are stored separately from SHAP"
   },
   "scenario_simulation": {
     "method": "controlled LightGBM re-scoring",
@@ -686,54 +304,54 @@
     "temperature_options": [
       {
         "id": "cooler_5c",
-        "label": "降温 5°C",
+        "label": "\u964d\u6e29 5\u00b0C",
         "delta_c": -5.0
       },
       {
         "id": "observed",
-        "label": "原始天气",
+        "label": "\u539f\u59cb\u5929\u6c14",
         "delta_c": 0.0
       },
       {
         "id": "warmer_5c",
-        "label": "升温 5°C",
+        "label": "\u5347\u6e29 5\u00b0C",
         "delta_c": 5.0
       }
     ],
     "rain_options": [
       {
         "id": "dry",
-        "label": "无降雨",
+        "label": "\u65e0\u964d\u96e8",
         "precipitation_mm": 0.0
       },
       {
         "id": "observed",
-        "label": "原始降雨",
+        "label": "\u539f\u59cb\u964d\u96e8",
         "precipitation_mm": null
       },
       {
         "id": "heavy_20mm",
-        "label": "强降雨 20 mm",
+        "label": "\u5f3a\u964d\u96e8 20 mm",
         "precipitation_mm": 20.0
       }
     ],
     "holiday_options": [
       {
         "id": "ordinary_day",
-        "label": "普通日"
+        "label": "\u666e\u901a\u65e5"
       },
       {
         "id": "observed",
-        "label": "原始节假日"
+        "label": "\u539f\u59cb\u8282\u5047\u65e5"
       },
       {
         "id": "long_weekend",
-        "label": "长周末"
+        "label": "\u957f\u5468\u672b"
       }
     ],
     "combination_count": 27,
     "row_count": 226800,
-    "scope": "Re-scores the selected prediction while holding historical demand, price, other weather inputs, and store calibration fixed.",
+    "scope": "Re-scores one prediction while holding historical demand, price, sparse labels, other weather inputs, and store calibration fixed.",
     "causal": false
   },
   "artifacts": {
@@ -743,13 +361,11 @@
     "quality_report": "reports/model_quality/rolling_backtest_quality.csv"
   },
   "limitations": [
-    "P10/P90 use split conformal calibration for marginal 80% coverage; P50 remains the raw median quantile.",
-    "Conformal coverage is marginal over the calibration population and is not guaranteed for each store, SKU, or horizon day.",
-    "Store bias factors use only the seven days before each forecast origin, are shrunk toward one, and may not persist under abrupt demand shifts.",
-    "Kalman parameters are fixed; only the LightGBM/Kalman blend weight is selected on each pre-origin calibration window.",
-    "Kalman forecasts are observational state estimates, not causal demand estimates.",
-    "This retrospective backtest covers five fixed seven-day origins only.",
-    "TreeSHAP explains model output and feature association, not causal business impact.",
-    "What-if results are controlled model responses, not causal estimates or operational guarantees."
+    "P10/P90 use split conformal calibration for marginal 80% coverage.",
+    "Coverage is not guaranteed for each store, SKU, or horizon day.",
+    "Sparse labels use only data before the first backtest origin.",
+    "The retrospective backtest covers five fixed seven-day origins.",
+    "TreeSHAP explains model association, not causal business impact.",
+    "What-if outputs are controlled model responses, not causal estimates."
   ]
 }

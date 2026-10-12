@@ -100,9 +100,10 @@ class RollingBacktestTest(unittest.TestCase):
                 "pred_p90_uncalibrated",
                 "conformal_adjustment",
                 "pred_lightgbm_model",
-                "pred_kalman",
-                "pred_lightgbm_kalman",
-                "kalman_fusion_weight",
+                "pred_lightgbm_raw",
+                "pred_baseline_yesterday",
+                "pred_baseline_last_week",
+                "pred_baseline_rolling_28d",
                 "store_bias_factor",
                 "store_bias_adjustment",
             }.issubset(predictions.columns)
@@ -224,16 +225,7 @@ class RollingBacktestTest(unittest.TestCase):
                 for training_run in metadata["training_runs"]
             )
         )
-        self.assertTrue(
-            all(
-                0 <= training_run["kalman_fusion_weight"] <= 1
-                for training_run in metadata["training_runs"]
-            )
-        )
-        self.assertIn(
-            metadata["selected_point_forecast"],
-            {"pred_lightgbm", "pred_lightgbm_kalman"},
-        )
+        self.assertEqual(metadata["selected_point_forecast"], "pred_lightgbm")
 
     def test_prediction_ids_are_stable_and_entity_specific(self):
         frame = pd.DataFrame(

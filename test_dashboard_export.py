@@ -47,16 +47,16 @@ class DashboardExportTest(unittest.TestCase):
         self.assertEqual(metadata["validation_days"], 35)
         self.assertEqual(metadata["backtest_windows"], 5)
         self.assertEqual(metadata["sample_count"], 8400)
-        self.assertEqual(metadata["feature_count"], 44)
+        self.assertEqual(metadata["feature_count"], 53)
         self.assertEqual(
             metadata["model_name"],
-            "Global LightGBM (lightgbm.LGBMRegressor)",
+            "Global LightGBM (direct Tweedie + sparse labels)",
         )
-        self.assertAlmostEqual(metrics["mae"], 2.633)
-        self.assertAlmostEqual(metrics["rmse"], 3.913)
-        self.assertAlmostEqual(metrics["wape"], 37.9)
-        self.assertAlmostEqual(metrics["r2"], 0.607)
-        self.assertAlmostEqual(metrics["interval_coverage"], 80.3)
+        self.assertAlmostEqual(metrics["mae"], 2.411)
+        self.assertAlmostEqual(metrics["rmse"], 3.636)
+        self.assertAlmostEqual(metrics["wape"], 34.7)
+        self.assertAlmostEqual(metrics["r2"], 0.661)
+        self.assertAlmostEqual(metrics["interval_coverage"], 80.6)
         self.assertTrue(metrics["candidate_eligible"])
 
     def test_snapshot_does_not_restore_leaking_feature(self):
@@ -64,7 +64,7 @@ class DashboardExportTest(unittest.TestCase):
             row["feature"] for row in self.payload["feature_importance"]
         }
         self.assertNotIn("sku_share", feature_names)
-        self.assertIn("sku_share_28d", feature_names)
+        self.assertIn("adi", feature_names)
 
     def test_snapshot_exposes_all_filter_paths_and_daily_shards(self):
         self.assertEqual(len(self.payload["hierarchy"]), 240)
@@ -120,7 +120,7 @@ class DashboardExportTest(unittest.TestCase):
             diagnostics["histogram_sample_count"],
             len(self.predictions),
         )
-        self.assertAlmostEqual(diagnostics["mean_error"], 0.370, places=3)
+        self.assertAlmostEqual(diagnostics["mean_error"], 0.483, places=3)
         self.assertIn("确定性抽样", diagnostics["scatter_sampling"])
 
     def test_demand_heatmap_covers_each_store_sku_and_date(self):
@@ -168,9 +168,9 @@ class DashboardExportTest(unittest.TestCase):
                 )
         top = risk["by_date"]["2023-06-30"]["__all__"][0]
         self.assertEqual(top["store"], "Hell's Kitchen")
-        self.assertEqual(top["sku"], 63)
-        self.assertEqual(top["product_name_zh"], "焦糖糖浆")
-        self.assertAlmostEqual(top["upside_gap"], 9.0)
+        self.assertEqual(top["sku"], 65)
+        self.assertEqual(top["product_name_zh"], "无糖香草糖浆")
+        self.assertAlmostEqual(top["upside_gap"], 10.2)
 
     def test_explanation_shard_preserves_prediction_additivity(self):
         sample_prediction = self.predictions.iloc[[0]]
