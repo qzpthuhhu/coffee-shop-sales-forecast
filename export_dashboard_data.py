@@ -13,6 +13,7 @@ ROOT = Path(__file__).parent
 REPORT_DIR = ROOT / "reports" / "model_quality"
 OUTPUT_FILE = ROOT / "dashboard" / "data.json"
 EXPLANATION_DIR = ROOT / "dashboard" / "explanations"
+SCENARIO_FILE = REPORT_DIR / "rolling_backtest_scenarios.csv.gz"
 PREDICTION_COLUMN = "pred_lightgbm"
 TOP_CONTRIBUTIONS = 10
 
@@ -352,6 +353,7 @@ def build_dashboard_payload(
         "dates": dates,
         "hierarchy": hierarchy_rows,
         "feature_catalog": feature_catalog,
+        "scenario_contract": run_metadata["scenario_simulation"],
         "explanation_shards": {
             date: f"explanations/{date}.json" for date in dates
         },
@@ -362,13 +364,24 @@ def build_dashboard_payload(
     }
 
 
-def build_explanation_shards(predictions, shap_contributions, generated_at):
+def build_explanation_shards(
+    predictions,
+    shap_contributions,
+    generated_at,
+    scenarios=None,
+):
     predictions = predictions.copy()
     predictions["date"] = pd.to_datetime(predictions["date"])
     shap_groups = {
         prediction_id: rows
         for prediction_id, rows in shap_contributions.groupby("prediction_id")
     }
+    scenario_groups = {}
+    if scenarios is not None:
+        scenario_groups = {
+            prediction_id: rows.sort_values("scenario_index")
+            for prediction_id, rows in scenarios.groupby("prediction_id")
+        }
     shards = {}
     for date, date_rows in predictions.groupby("date", sort=True):
         records = []
@@ -393,7 +406,7 @@ def build_explanation_shards(predictions, shap_contributions, generated_at):
                 "contribution": _round(other, 6),
                 "direction": "increase" if other >= 0 else "decrease",
             })
-            records.append({
+            record = {
                 "prediction_id": row.prediction_id,
                 "model_run_id": row.model_run_id,
                 "forecast_origin": row.forecast_origin,
@@ -421,7 +434,33 @@ def build_explanation_shards(predictions, shap_contributions, generated_at):
                 ),
                 "additivity_error": _round(row.shap_additivity_error, 12),
                 "contributions": detail,
-            })
+            }
+            if scenario_groups:
+                scenario_rows = scenario_groups[row.prediction_id]
+                baseline = scenario_rows[
+                    (scenario_rows["temperature_id"] == "observed")
+                    & (scenario_rows["rain_id"] == "observed")
+                    & (scenario_rows["holiday_id"] == "observed")
+                ].iloc[0]
+                record["scenario_inputs"] = {
+                    "temperature_2m_mean": _round(
+                        baseline.temperature_2m_mean,
+                        1,
+                    ),
+                    "precipitation_sum": _round(
+                        baseline.precipitation_sum,
+                        1,
+                    ),
+                    "is_holiday_detailed": int(
+                        baseline.is_holiday_detailed
+                    ),
+                    "is_long_weekend": int(baseline.is_long_weekend),
+                }
+                record["scenario_predictions"] = [
+                    _round(value, 4)
+                    for value in scenario_rows["simulated_prediction"]
+                ]
+            records.append(record)
         date_key = date.strftime("%Y-%m-%d")
         shards[date_key] = {
             "date": date_key,
@@ -437,6 +476,7 @@ def export_dashboard_data(output_file=OUTPUT_FILE):
     shap_contributions = pd.read_csv(
         REPORT_DIR / "rolling_backtest_shap.csv.gz"
     )
+    scenarios = pd.read_csv(SCENARIO_FILE)
     run_metadata = json.loads(
         (REPORT_DIR / "rolling_backtest_run.json").read_text(encoding="utf-8")
     )
@@ -449,7 +489,10 @@ def export_dashboard_data(output_file=OUTPUT_FILE):
         generated_at=generated_at,
     )
     shards = build_explanation_shards(
-        predictions, shap_contributions, generated_at
+        predictions,
+        shap_contributions,
+        generated_at,
+        scenarios=scenarios,
     )
 
     output_file.parent.mkdir(parents=True, exist_ok=True)

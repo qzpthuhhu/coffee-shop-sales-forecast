@@ -27,7 +27,7 @@ from predict_pipeline import (
 
 REPORT_DIR = DATA_DIR / "reports" / "model_quality"
 BACKTEST_WINDOW_COUNT = 5
-PIPELINE_VERSION = "rolling-backtest-v5-store-bias-calibration"
+PIPELINE_VERSION = "rolling-backtest-v6-scenario-response"
 ENTITY_KEYS = ["store_id", "product_id"]
 HISTORY_FEATURE_COLS = (
     [f"qty_lag_{lag}" for lag in HISTORY_LAGS]
@@ -54,6 +54,22 @@ SHAP_ADDITIVITY_TOLERANCE = 1e-6
 STORE_BIAS_SHRINKAGE = 0.50
 STORE_BIAS_FACTOR_MIN = 0.85
 STORE_BIAS_FACTOR_MAX = 1.20
+SCENARIO_TEMPERATURES = (
+    {"id": "cooler_5c", "label": "降温 5°C", "delta_c": -5.0},
+    {"id": "observed", "label": "原始天气", "delta_c": 0.0},
+    {"id": "warmer_5c", "label": "升温 5°C", "delta_c": 5.0},
+)
+SCENARIO_RAIN = (
+    {"id": "dry", "label": "无降雨", "precipitation_mm": 0.0},
+    {"id": "observed", "label": "原始降雨", "precipitation_mm": None},
+    {"id": "heavy_20mm", "label": "强降雨 20 mm", "precipitation_mm": 20.0},
+)
+SCENARIO_HOLIDAYS = (
+    {"id": "ordinary_day", "label": "普通日"},
+    {"id": "observed", "label": "原始节假日"},
+    {"id": "long_weekend", "label": "长周末"},
+)
+SCENARIO_BASELINE = ("observed", "observed", "observed")
 
 
 def build_model_run_id(
@@ -157,6 +173,122 @@ def explain_tree_predictions(model, feature_frame, prediction_ids, feature_cols)
     return summary, contributions
 
 
+def build_scenario_grid(model, current, feature_cols):
+    """Score controlled weather and holiday combinations for each prediction."""
+    required = {
+        "prediction_id",
+        "pred_lightgbm",
+        "store_bias_factor",
+        "temperature_2m_max",
+        "temperature_2m_min",
+        "temperature_2m_mean",
+        "precipitation_sum",
+        "is_rain",
+        "is_snow",
+        "is_clear",
+        "is_holiday_detailed",
+        "is_pre_holiday_1d",
+        "is_pre_holiday_3d",
+        "is_post_holiday_1d",
+        "is_long_weekend",
+        "holiday_impact_code",
+        "is_hot",
+        "is_cold",
+    }
+    missing = required.difference(current.columns)
+    if missing:
+        raise ValueError(f"Missing scenario columns: {sorted(missing)}")
+
+    scenario_rows = []
+    scenario_index = 0
+    for temperature in SCENARIO_TEMPERATURES:
+        for rain in SCENARIO_RAIN:
+            for holiday in SCENARIO_HOLIDAYS:
+                scenario = current.copy()
+                temperature_delta = temperature["delta_c"]
+                for column in (
+                    "temperature_2m_max",
+                    "temperature_2m_min",
+                    "temperature_2m_mean",
+                ):
+                    scenario[column] = scenario[column] + temperature_delta
+                scenario["is_hot"] = (
+                    scenario["temperature_2m_max"] > 25
+                ).astype(int)
+                scenario["is_cold"] = (
+                    scenario["temperature_2m_max"] < 5
+                ).astype(int)
+
+                precipitation = rain["precipitation_mm"]
+                if precipitation is not None:
+                    scenario["precipitation_sum"] = precipitation
+                    scenario["is_rain"] = int(precipitation > 0)
+                    scenario["is_snow"] = 0
+                    scenario["is_clear"] = int(precipitation == 0)
+
+                if holiday["id"] != "observed":
+                    for column in (
+                        "is_holiday_detailed",
+                        "is_pre_holiday_1d",
+                        "is_pre_holiday_3d",
+                        "is_post_holiday_1d",
+                        "is_long_weekend",
+                    ):
+                        scenario[column] = 0
+                    scenario["holiday_impact_code"] = 0
+                    if holiday["id"] == "long_weekend":
+                        scenario["is_holiday_detailed"] = 1
+                        scenario["is_long_weekend"] = 1
+                        scenario["holiday_impact_code"] = 2
+
+                raw_prediction = np.asarray(
+                    model.predict(scenario[feature_cols]),
+                    dtype=float,
+                )
+                simulated = (
+                    np.clip(raw_prediction, a_min=0, a_max=None)
+                    * scenario["store_bias_factor"].to_numpy(dtype=float)
+                )
+                scenario_rows.append(
+                    pd.DataFrame(
+                        {
+                            "prediction_id": scenario["prediction_id"],
+                            "scenario_index": scenario_index,
+                            "temperature_id": temperature["id"],
+                            "rain_id": rain["id"],
+                            "holiday_id": holiday["id"],
+                            "temperature_2m_mean": scenario[
+                                "temperature_2m_mean"
+                            ],
+                            "precipitation_sum": scenario[
+                                "precipitation_sum"
+                            ],
+                            "is_holiday_detailed": scenario[
+                                "is_holiday_detailed"
+                            ],
+                            "is_long_weekend": scenario["is_long_weekend"],
+                            "simulated_prediction": simulated,
+                        }
+                    )
+                )
+                scenario_index += 1
+
+    result = pd.concat(scenario_rows, ignore_index=True)
+    baseline = result[
+        (result["temperature_id"] == SCENARIO_BASELINE[0])
+        & (result["rain_id"] == SCENARIO_BASELINE[1])
+        & (result["holiday_id"] == SCENARIO_BASELINE[2])
+    ].sort_values("prediction_id")
+    expected = current.sort_values("prediction_id")
+    np.testing.assert_allclose(
+        baseline["simulated_prediction"],
+        expected["pred_lightgbm"],
+        atol=1e-9,
+        rtol=0,
+    )
+    return result
+
+
 def select_backtest_origins(
     dates,
     window_count=BACKTEST_WINDOW_COUNT,
@@ -232,16 +364,20 @@ def recursive_forecast(
     store_bias_factors=None,
     model_run_id=None,
     include_explanations=False,
+    include_scenarios=False,
 ):
     """Forecast one day at a time without reading labels at or after origin."""
-    if include_explanations and not model_run_id:
-        raise ValueError("model_run_id is required when explanations are enabled")
+    if (include_explanations or include_scenarios) and not model_run_id:
+        raise ValueError(
+            "model_run_id is required when explanations or scenarios are enabled"
+        )
 
     forecast_dates = pd.date_range(origin, periods=horizon, freq="D")
     state = df[["date", *ENTITY_KEYS, "qty"]].copy()
     state.loc[state["date"] >= origin, "qty"] = np.nan
     forecast_rows = []
     explanation_rows = []
+    scenario_rows = []
 
     for forecast_date in forecast_dates:
         history = add_history_features(state[state["date"] <= forecast_date].copy())
@@ -299,6 +435,10 @@ def recursive_forecast(
                 current,
                 store_bias_factors,
             )
+        if include_scenarios:
+            scenario_rows.append(
+                build_scenario_grid(model, current, feature_cols)
+            )
         forecast_rows.append(current)
 
         predicted = current[[*ENTITY_KEYS, "pred_lightgbm"]].rename(
@@ -314,8 +454,16 @@ def recursive_forecast(
         state.loc[update_index, "qty"] = state_today["qty"].to_numpy()
 
     forecasts = pd.concat(forecast_rows, ignore_index=True)
+    if include_explanations and include_scenarios:
+        return (
+            forecasts,
+            pd.concat(explanation_rows, ignore_index=True),
+            pd.concat(scenario_rows, ignore_index=True),
+        )
     if include_explanations:
         return forecasts, pd.concat(explanation_rows, ignore_index=True)
+    if include_scenarios:
+        return forecasts, pd.concat(scenario_rows, ignore_index=True)
     return forecasts
 
 
@@ -623,6 +771,7 @@ def run_rolling_backtest(
     )
     all_predictions = []
     all_shap_contributions = []
+    all_scenarios = []
     training_runs = []
 
     for origin in origins:
@@ -661,7 +810,7 @@ def run_rolling_backtest(
             store_bias_factors=store_bias_factors,
         )
         conformal_adjustment = calculate_conformal_adjustment(calibration_forecast)
-        forecast, shap_contributions = recursive_forecast(
+        forecast, shap_contributions, scenarios = recursive_forecast(
             model,
             df,
             feature_cols,
@@ -671,6 +820,7 @@ def run_rolling_backtest(
             store_bias_factors=store_bias_factors,
             model_run_id=run_id,
             include_explanations=True,
+            include_scenarios=True,
         )
         forecast = apply_conformal_adjustment(forecast, conformal_adjustment)
         forecast = add_origin_safe_baselines(forecast, df, origin)
@@ -680,6 +830,7 @@ def run_rolling_backtest(
         forecast["absolute_error"] = forecast["prediction_error"].abs()
         all_predictions.append(forecast)
         all_shap_contributions.append(shap_contributions)
+        all_scenarios.append(scenarios)
         training_runs.append(
             {
                 "forecast_origin": origin.date().isoformat(),
@@ -704,6 +855,7 @@ def run_rolling_backtest(
 
     predictions = pd.concat(all_predictions, ignore_index=True)
     shap_contributions = pd.concat(all_shap_contributions, ignore_index=True)
+    scenarios = pd.concat(all_scenarios, ignore_index=True)
     quality, model_is_candidate = build_quality_report(predictions)
     generated_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
@@ -711,6 +863,7 @@ def run_rolling_backtest(
     output_dir.mkdir(parents=True, exist_ok=True)
     prediction_path = output_dir / "rolling_backtest_predictions.csv"
     shap_path = output_dir / "rolling_backtest_shap.csv.gz"
+    scenario_path = output_dir / "rolling_backtest_scenarios.csv.gz"
     quality_path = output_dir / "rolling_backtest_quality.csv"
     metadata_path = output_dir / "rolling_backtest_run.json"
     prediction_columns = [
@@ -744,6 +897,11 @@ def run_rolling_backtest(
     predictions[prediction_columns].to_csv(prediction_path, index=False)
     shap_contributions.to_csv(
         shap_path,
+        index=False,
+        compression={"method": "gzip", "compresslevel": 6, "mtime": 0},
+    )
+    scenarios.to_csv(
+        scenario_path,
         index=False,
         compression={"method": "gzip", "compresslevel": 6, "mtime": 0},
     )
@@ -816,9 +974,32 @@ def run_rolling_backtest(
                 "separately from SHAP"
             ),
         },
+        "scenario_simulation": {
+            "method": "controlled LightGBM re-scoring",
+            "baseline": {
+                "temperature_id": SCENARIO_BASELINE[0],
+                "rain_id": SCENARIO_BASELINE[1],
+                "holiday_id": SCENARIO_BASELINE[2],
+            },
+            "temperature_options": SCENARIO_TEMPERATURES,
+            "rain_options": SCENARIO_RAIN,
+            "holiday_options": SCENARIO_HOLIDAYS,
+            "combination_count": (
+                len(SCENARIO_TEMPERATURES)
+                * len(SCENARIO_RAIN)
+                * len(SCENARIO_HOLIDAYS)
+            ),
+            "row_count": len(scenarios),
+            "scope": (
+                "Re-scores the selected prediction while holding historical "
+                "demand, price, other weather inputs, and store calibration fixed."
+            ),
+            "causal": False,
+        },
         "artifacts": {
             "predictions": str(prediction_path.relative_to(DATA_DIR)),
             "shap_contributions": str(shap_path.relative_to(DATA_DIR)),
+            "scenario_responses": str(scenario_path.relative_to(DATA_DIR)),
             "quality_report": str(quality_path.relative_to(DATA_DIR)),
         },
         "limitations": [
@@ -827,6 +1008,7 @@ def run_rolling_backtest(
             "Store bias factors use only the seven days before each forecast origin, are shrunk toward one, and may not persist under abrupt demand shifts.",
             "This retrospective backtest covers five fixed seven-day origins only.",
             "TreeSHAP explains model output and feature association, not causal business impact.",
+            "What-if results are controlled model responses, not causal estimates or operational guarantees.",
         ],
     }
     metadata_path.write_text(

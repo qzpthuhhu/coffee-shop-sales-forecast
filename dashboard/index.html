@@ -197,6 +197,33 @@ tbody tr:hover { background:#faf9f6; }
 .prediction-metric span { display:block; color:var(--muted); font-size:11px; }
 .prediction-metric strong { display:block; margin-top:3px; font-size:18px; font-variant-numeric:tabular-nums; }
 .interval { grid-column:span 2; }
+.scenario-layout {
+  display:grid; grid-template-columns:minmax(0,1.2fr) minmax(280px,.8fr);
+  gap:18px; align-items:start;
+}
+.scenario-controls {
+  display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px;
+}
+.scenario-controls .field { min-width:0; }
+.scenario-controls select { width:100%; min-height:44px; }
+.scenario-result {
+  display:grid; grid-template-columns:repeat(3,minmax(0,1fr));
+  border:1px solid var(--line); background:#fcfbf8;
+}
+.scenario-result div { min-width:0; padding:12px; border-right:1px solid var(--line); }
+.scenario-result div:last-child { border-right:0; }
+.scenario-result span { display:block; color:var(--muted); font-size:11px; }
+.scenario-result strong {
+  display:block; margin-top:3px; color:var(--coffee); font-size:18px;
+  font-variant-numeric:tabular-nums;
+}
+.scenario-evidence {
+  margin:10px 0 0; color:var(--muted); font-size:11px; overflow-wrap:anywhere;
+}
+.scenario-warning {
+  margin:12px 0 0; padding:9px 11px; border-left:3px solid var(--cherry);
+  background:var(--red-soft); color:#73342f; font-size:12px;
+}
 .waterfall { display:grid; gap:7px; margin-top:14px; }
 .wf-row { display:grid; grid-template-columns:minmax(160px,220px) minmax(220px,1fr) 84px; gap:12px; align-items:center; min-height:31px; }
 .wf-name { min-width:0; }
@@ -236,6 +263,7 @@ tbody tr:hover { background:#faf9f6; }
   .prediction-metrics { grid-template-columns:repeat(3,1fr); }
   .prediction-metric:nth-child(3) { border-right:0; }
   .prediction-metric:nth-child(-n+3) { border-bottom:1px solid var(--line); }
+  .scenario-layout { grid-template-columns:1fr; }
 }
 @media (max-width:760px) {
   .shell { padding:0 14px 32px; }
@@ -266,6 +294,7 @@ tbody tr:hover { background:#faf9f6; }
   .prediction-metric:nth-child(2n) { border-right:0; }
   .prediction-metric:nth-last-child(-n+2) { border-bottom:0; }
   .interval { grid-column:span 1; }
+  .scenario-controls { grid-template-columns:1fr; }
   .wf-row { grid-template-columns:minmax(110px,150px) minmax(130px,1fr) 64px; gap:7px; }
   .contribution-list { grid-template-columns:1fr; }
 }
@@ -483,6 +512,40 @@ tbody tr:hover { background:#faf9f6; }
           <section class="panel">
             <div class="panel-head">
               <div>
+                <h2>天气与节假日 What-if</h2>
+                <p class="panel-kicker">对当前门店 × SKU × 日期重新运行同一 LightGBM 点模型</p>
+              </div>
+            </div>
+            <div class="scenario-layout">
+              <div>
+                <div class="scenario-controls">
+                  <div class="field">
+                    <label for="scenario-temperature">温度情景</label>
+                    <select id="scenario-temperature"></select>
+                  </div>
+                  <div class="field">
+                    <label for="scenario-rain">降雨情景</label>
+                    <select id="scenario-rain"></select>
+                  </div>
+                  <div class="field">
+                    <label for="scenario-holiday">节假日情景</label>
+                    <select id="scenario-holiday"></select>
+                  </div>
+                </div>
+                <p class="scenario-evidence" id="scenario-evidence">等待当前预测的场景响应数据。</p>
+                <p class="scenario-warning">模型响应模拟，不是因果推断。结果只反映模型在受控输入下的输出变化，不能证明天气或节假日会造成同等销量变化。</p>
+              </div>
+              <div class="scenario-result" aria-live="polite">
+                <div><span>原始点预测</span><strong id="scenario-baseline">--</strong></div>
+                <div><span>模拟点预测</span><strong id="scenario-prediction">--</strong></div>
+                <div><span>模型响应</span><strong id="scenario-delta">--</strong></div>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head">
+              <div>
                 <h2>因素证据明细</h2>
                 <p class="panel-kicker">Top 10 因素显示原始特征值、方向、贡献杯数与中文业务解释</p>
               </div>
@@ -502,6 +565,7 @@ let DATA = null;
 let chart = null;
 let scatterChart = null;
 let histogramChart = null;
+let currentExplanation = null;
 const shardCache = new Map();
 const COLORS = { actual:'#332821', prediction:'#356b8c', error:'#b4463e' };
 
@@ -895,6 +959,7 @@ async function loadSelectedExplanation() {
 }
 
 function renderExplanation(record) {
+  currentExplanation = record;
   byId('prediction-title').textContent = `${record.store} · SKU ${record.sku}`;
   byId('prediction-subtitle').textContent = `${record.date} · ${record.category} / ${record.type} · 起点 ${record.forecast_origin}`;
   byId('p-actual').textContent = `${fmt(record.actual,1)} 杯`;
@@ -906,6 +971,7 @@ function renderExplanation(record) {
   byId('p-base').textContent = `${fmt(record.base_value,2)} 杯`;
   byId('trace-id').innerHTML = `prediction_id<br><strong>${esc(record.prediction_id)}</strong><br><br>model_run_id<br><strong>${esc(record.model_run_id)}</strong>`;
   renderWaterfall(record);
+  renderScenario(record);
   byId('contribution-list').innerHTML = record.contributions.map(item => {
     const meta = DATA.feature_catalog[item.feature];
     const explanation = item.contribution >= 0 ? meta.increase_explanation : meta.decrease_explanation;
@@ -919,6 +985,78 @@ function renderExplanation(record) {
       <p>${esc(explanation)}</p>
     </article>
   `}).join('');
+}
+
+function initializeScenarioControls() {
+  const contract = DATA.scenario_contract;
+  setOptions(
+    byId('scenario-temperature'),
+    contract.temperature_options.map(option => option.id),
+    value => contract.temperature_options.find(option => option.id === value).label
+  );
+  setOptions(
+    byId('scenario-rain'),
+    contract.rain_options.map(option => option.id),
+    value => contract.rain_options.find(option => option.id === value).label
+  );
+  setOptions(
+    byId('scenario-holiday'),
+    contract.holiday_options.map(option => option.id),
+    value => contract.holiday_options.find(option => option.id === value).label
+  );
+  ['scenario-temperature','scenario-rain','scenario-holiday'].forEach(id => {
+    byId(id).addEventListener('change', () => {
+      if (currentExplanation) renderScenario(currentExplanation, false);
+    });
+  });
+}
+
+function renderScenario(record, reset=true) {
+  const contract = DATA.scenario_contract;
+  if (reset) {
+    byId('scenario-temperature').value = contract.baseline.temperature_id;
+    byId('scenario-rain').value = contract.baseline.rain_id;
+    byId('scenario-holiday').value = contract.baseline.holiday_id;
+  }
+  const temperatureIndex = contract.temperature_options.findIndex(
+    option => option.id === byId('scenario-temperature').value
+  );
+  const rainIndex = contract.rain_options.findIndex(
+    option => option.id === byId('scenario-rain').value
+  );
+  const holidayIndex = contract.holiday_options.findIndex(
+    option => option.id === byId('scenario-holiday').value
+  );
+  const scenarioIndex = (
+    temperatureIndex
+    * contract.rain_options.length
+    * contract.holiday_options.length
+    + rainIndex * contract.holiday_options.length
+    + holidayIndex
+  );
+  const simulated = record.scenario_predictions[scenarioIndex];
+  const delta = simulated - record.prediction;
+  const displayedDelta = Math.abs(delta) < 0.05 ? 0 : delta;
+  const temperature = contract.temperature_options[temperatureIndex];
+  const rain = contract.rain_options[rainIndex];
+  const holiday = contract.holiday_options[holidayIndex];
+  const temperatureValue = record.scenario_inputs.temperature_2m_mean + temperature.delta_c;
+  const precipitationValue = rain.precipitation_mm === null
+    ? record.scenario_inputs.precipitation_sum
+    : rain.precipitation_mm;
+  const originalHoliday = record.scenario_inputs.is_long_weekend
+    ? '长周末'
+    : record.scenario_inputs.is_holiday_detailed ? '节假日' : '普通日';
+  const holidayValue = holiday.id === 'observed' ? `${holiday.label}（${originalHoliday}）` : holiday.label;
+
+  byId('scenario-baseline').textContent = `${fmt(record.prediction,1)} 杯`;
+  byId('scenario-prediction').textContent = `${fmt(simulated,1)} 杯`;
+  byId('scenario-delta').textContent = `${displayedDelta > 0 ? '+' : ''}${fmt(displayedDelta,1)} 杯`;
+  byId('scenario-delta').className = displayedDelta >= 0 ? 'positive' : 'negative';
+  byId('scenario-evidence').textContent = (
+    `输入：平均气温 ${fmt(temperatureValue,1)}°C，降水 ${fmt(precipitationValue,1)} mm，${holidayValue}。`
+    + ` 历史需求、价格、其余天气输入和门店校准因子 ×${fmt(record.store_bias_factor,3)} 保持不变；P10-P90 未重新估计。`
+  );
 }
 
 function renderWaterfall(record) {
@@ -1013,6 +1151,7 @@ async function init() {
     initializeCalendar();
     renderDiagnostics();
     renderErrorTable();
+    initializeScenarioControls();
     initializeFilters();
     await loadSelectedExplanation();
   } catch (error) {

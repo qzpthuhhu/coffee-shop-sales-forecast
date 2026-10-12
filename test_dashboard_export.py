@@ -22,6 +22,9 @@ class DashboardExportTest(unittest.TestCase):
         )
         cls.quality = pd.read_csv(REPORT_DIR / "rolling_backtest_quality.csv")
         cls.shap = pd.read_csv(REPORT_DIR / "rolling_backtest_shap.csv.gz")
+        cls.scenarios = pd.read_csv(
+            REPORT_DIR / "rolling_backtest_scenarios.csv.gz"
+        )
         cls.run_metadata = json.loads(
             (REPORT_DIR / "rolling_backtest_run.json").read_text(
                 encoding="utf-8"
@@ -114,6 +117,9 @@ class DashboardExportTest(unittest.TestCase):
             sample_prediction,
             sample_shap,
             generated_at="2026-10-12T00:00:00+00:00",
+            scenarios=self.scenarios[
+                self.scenarios["prediction_id"] == prediction_id
+            ],
         )
         record = shards["2023-05-27"]["records"][0]
 
@@ -135,6 +141,17 @@ class DashboardExportTest(unittest.TestCase):
             places=5,
         )
         self.assertTrue(self.payload["feature_catalog"]["qty_lag_1"]["label"])
+        self.assertEqual(len(record["scenario_predictions"]), 27)
+        self.assertEqual(
+            record["scenario_inputs"]["temperature_2m_mean"],
+            self.scenarios[
+                (self.scenarios["prediction_id"] == prediction_id)
+                & (self.scenarios["temperature_id"] == "observed")
+                & (self.scenarios["rain_id"] == "observed")
+                & (self.scenarios["holiday_id"] == "observed")
+            ].iloc[0]["temperature_2m_mean"],
+        )
+        self.assertFalse(self.payload["scenario_contract"]["causal"])
         self.assertIn(
             "不代表因果",
             self.payload["feature_catalog"]["qty_lag_1"][
@@ -172,6 +189,11 @@ class DashboardExportTest(unittest.TestCase):
         self.assertIn('id="calendar-store"', html)
         self.assertIn('id="sales-calendar"', html)
         self.assertIn("function renderCalendar()", html)
+        self.assertIn("模型响应模拟，不是因果推断", html)
+        self.assertIn('id="scenario-temperature"', html)
+        self.assertIn('id="scenario-rain"', html)
+        self.assertIn('id="scenario-holiday"', html)
+        self.assertIn("function renderScenario", html)
 
 
 if __name__ == "__main__":

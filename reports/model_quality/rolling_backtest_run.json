@@ -1,7 +1,7 @@
 {
-  "run_id": "rolling_backtest_ea70bff8f3052ef9",
-  "pipeline_version": "rolling-backtest-v5-store-bias-calibration",
-  "generated_at": "2026-10-12T02:52:51+00:00",
+  "run_id": "rolling_backtest_489cdcab6f77c3cd",
+  "pipeline_version": "rolling-backtest-v6-scenario-response",
+  "generated_at": "2026-10-12T05:07:33+00:00",
   "model_name": "Global LightGBM (lightgbm.LGBMRegressor)",
   "candidate_status": "candidate",
   "candidate_rule": "Aggregate LightGBM MAE and WAPE must both beat the best origin-safe baseline",
@@ -356,9 +356,70 @@
     "maximum_absolute_additivity_error": 5.861977570020827e-14,
     "postprocessing": "pred_lightgbm_model = max(0, pred_lightgbm_raw); pred_lightgbm = pred_lightgbm_model * the pre-origin store bias factor; postprocess_adjustment and store_bias_adjustment are stored separately from SHAP"
   },
+  "scenario_simulation": {
+    "method": "controlled LightGBM re-scoring",
+    "baseline": {
+      "temperature_id": "observed",
+      "rain_id": "observed",
+      "holiday_id": "observed"
+    },
+    "temperature_options": [
+      {
+        "id": "cooler_5c",
+        "label": "降温 5°C",
+        "delta_c": -5.0
+      },
+      {
+        "id": "observed",
+        "label": "原始天气",
+        "delta_c": 0.0
+      },
+      {
+        "id": "warmer_5c",
+        "label": "升温 5°C",
+        "delta_c": 5.0
+      }
+    ],
+    "rain_options": [
+      {
+        "id": "dry",
+        "label": "无降雨",
+        "precipitation_mm": 0.0
+      },
+      {
+        "id": "observed",
+        "label": "原始降雨",
+        "precipitation_mm": null
+      },
+      {
+        "id": "heavy_20mm",
+        "label": "强降雨 20 mm",
+        "precipitation_mm": 20.0
+      }
+    ],
+    "holiday_options": [
+      {
+        "id": "ordinary_day",
+        "label": "普通日"
+      },
+      {
+        "id": "observed",
+        "label": "原始节假日"
+      },
+      {
+        "id": "long_weekend",
+        "label": "长周末"
+      }
+    ],
+    "combination_count": 27,
+    "row_count": 226800,
+    "scope": "Re-scores the selected prediction while holding historical demand, price, other weather inputs, and store calibration fixed.",
+    "causal": false
+  },
   "artifacts": {
     "predictions": "reports/model_quality/rolling_backtest_predictions.csv",
     "shap_contributions": "reports/model_quality/rolling_backtest_shap.csv.gz",
+    "scenario_responses": "reports/model_quality/rolling_backtest_scenarios.csv.gz",
     "quality_report": "reports/model_quality/rolling_backtest_quality.csv"
   },
   "limitations": [
@@ -366,6 +427,7 @@
     "Conformal coverage is marginal over the calibration population and is not guaranteed for each store, SKU, or horizon day.",
     "Store bias factors use only the seven days before each forecast origin, are shrunk toward one, and may not persist under abrupt demand shifts.",
     "This retrospective backtest covers five fixed seven-day origins only.",
-    "TreeSHAP explains model output and feature association, not causal business impact."
+    "TreeSHAP explains model output and feature association, not causal business impact.",
+    "What-if results are controlled model responses, not causal estimates or operational guarantees."
   ]
 }

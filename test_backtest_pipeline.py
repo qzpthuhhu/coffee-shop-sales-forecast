@@ -13,11 +13,13 @@ from backtest_pipeline import (
     STORE_BIAS_FACTOR_MAX,
     STORE_BIAS_FACTOR_MIN,
     STORE_BIAS_SHRINKAGE,
+    SCENARIO_BASELINE,
     apply_conformal_adjustment,
     apply_store_bias_calibration,
     add_origin_safe_baselines,
     add_prediction_identity,
     build_quality_report,
+    build_scenario_grid,
     calculate_conformal_adjustment,
     calculate_store_bias_factors,
     explain_tree_predictions,
@@ -58,6 +60,15 @@ class ShiftedLagOneModel:
         return features["qty_lag_1"].fillna(0).to_numpy() + self.shift
 
 
+class ScenarioModel:
+    def predict(self, features):
+        return (
+            features["temperature_2m_mean"].to_numpy()
+            + features["precipitation_sum"].to_numpy() * 0.1
+            + features["is_long_weekend"].to_numpy() * 2
+        )
+
+
 class RollingBacktestTest(unittest.TestCase):
     def test_tracked_artifacts_include_conformalized_quantile_intervals(self):
         report_dir = Path(__file__).parent / "reports" / "model_quality"
@@ -66,6 +77,9 @@ class RollingBacktestTest(unittest.TestCase):
         )
         contributions = pd.read_csv(
             report_dir / "rolling_backtest_shap.csv.gz"
+        )
+        scenarios = pd.read_csv(
+            report_dir / "rolling_backtest_scenarios.csv.gz"
         )
         quality = pd.read_csv(report_dir / "rolling_backtest_quality.csv")
         metadata = json.loads(
@@ -162,6 +176,31 @@ class RollingBacktestTest(unittest.TestCase):
             "reports/model_quality/rolling_backtest_shap.csv.gz",
         )
         self.assertEqual(
+            metadata["artifacts"]["scenario_responses"],
+            "reports/model_quality/rolling_backtest_scenarios.csv.gz",
+        )
+        self.assertEqual(
+            len(scenarios),
+            len(predictions)
+            * metadata["scenario_simulation"]["combination_count"],
+        )
+        self.assertEqual(
+            scenarios.groupby("prediction_id")["scenario_index"].nunique().min(),
+            27,
+        )
+        baseline = scenarios[
+            (scenarios["temperature_id"] == SCENARIO_BASELINE[0])
+            & (scenarios["rain_id"] == SCENARIO_BASELINE[1])
+            & (scenarios["holiday_id"] == SCENARIO_BASELINE[2])
+        ].set_index("prediction_id")
+        np.testing.assert_allclose(
+            baseline.loc[predictions["prediction_id"], "simulated_prediction"],
+            predictions["pred_lightgbm"],
+            atol=1e-9,
+            rtol=0,
+        )
+        self.assertFalse(metadata["scenario_simulation"]["causal"])
+        self.assertEqual(
             metadata["store_bias_calibration"]["shrinkage_toward_one"],
             STORE_BIAS_SHRINKAGE,
         )
@@ -205,6 +244,56 @@ class RollingBacktestTest(unittest.TestCase):
             first["prediction_id"],
             second["prediction_id"],
         )
+
+    def test_scenario_grid_scores_all_controlled_combinations(self):
+        frame = pd.DataFrame(
+            {
+                "prediction_id": ["prediction_1"],
+                "pred_lightgbm": [17.0],
+                "store_bias_factor": [1.0],
+                "temperature_2m_max": [22.0],
+                "temperature_2m_min": [12.0],
+                "temperature_2m_mean": [17.0],
+                "precipitation_sum": [0.0],
+                "is_rain": [0],
+                "is_snow": [0],
+                "is_clear": [1],
+                "is_holiday_detailed": [0],
+                "is_pre_holiday_1d": [0],
+                "is_pre_holiday_3d": [0],
+                "is_post_holiday_1d": [0],
+                "is_long_weekend": [0],
+                "holiday_impact_code": [0],
+                "is_hot": [0],
+                "is_cold": [0],
+            }
+        )
+        feature_cols = [
+            "temperature_2m_mean",
+            "precipitation_sum",
+            "is_long_weekend",
+        ]
+
+        scenarios = build_scenario_grid(
+            ScenarioModel(),
+            frame,
+            feature_cols,
+        )
+
+        self.assertEqual(len(scenarios), 27)
+        self.assertEqual(scenarios["scenario_index"].nunique(), 27)
+        baseline = scenarios[
+            (scenarios["temperature_id"] == "observed")
+            & (scenarios["rain_id"] == "observed")
+            & (scenarios["holiday_id"] == "observed")
+        ].iloc[0]
+        self.assertAlmostEqual(baseline["simulated_prediction"], 17.0)
+        changed = scenarios[
+            (scenarios["temperature_id"] == "warmer_5c")
+            & (scenarios["rain_id"] == "heavy_20mm")
+            & (scenarios["holiday_id"] == "long_weekend")
+        ].iloc[0]
+        self.assertAlmostEqual(changed["simulated_prediction"], 26.0)
 
     def test_tree_shap_preserves_signed_row_level_additivity(self):
         features = pd.DataFrame(
