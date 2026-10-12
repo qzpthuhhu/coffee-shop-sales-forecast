@@ -49,11 +49,11 @@ class DashboardExportTest(unittest.TestCase):
             metadata["model_name"],
             "Global LightGBM (lightgbm.LGBMRegressor)",
         )
-        self.assertAlmostEqual(metrics["mae"], 2.655)
-        self.assertAlmostEqual(metrics["rmse"], 3.991)
-        self.assertAlmostEqual(metrics["wape"], 38.2)
-        self.assertAlmostEqual(metrics["r2"], 0.592)
-        self.assertAlmostEqual(metrics["interval_coverage"], 80.6)
+        self.assertAlmostEqual(metrics["mae"], 2.633)
+        self.assertAlmostEqual(metrics["rmse"], 3.913)
+        self.assertAlmostEqual(metrics["wape"], 37.9)
+        self.assertAlmostEqual(metrics["r2"], 0.607)
+        self.assertAlmostEqual(metrics["interval_coverage"], 80.3)
         self.assertTrue(metrics["candidate_eligible"])
 
     def test_snapshot_does_not_restore_leaking_feature(self):
@@ -85,7 +85,7 @@ class DashboardExportTest(unittest.TestCase):
             diagnostics["histogram_sample_count"],
             len(self.predictions),
         )
-        self.assertAlmostEqual(diagnostics["mean_error"], 0.773, places=3)
+        self.assertAlmostEqual(diagnostics["mean_error"], 0.370, places=3)
         self.assertIn("确定性抽样", diagnostics["scatter_sampling"])
 
     def test_demand_heatmap_covers_each_store_sku_and_date(self):
@@ -123,8 +123,15 @@ class DashboardExportTest(unittest.TestCase):
         )
         self.assertAlmostEqual(reconstructed, record["raw_prediction"], places=5)
         self.assertAlmostEqual(
-            record["raw_prediction"] + record["postprocess_adjustment"],
+            record["raw_prediction"]
+            + record["postprocess_adjustment"]
+            + record["store_bias_adjustment"],
             record["prediction"],
+            places=5,
+        )
+        self.assertAlmostEqual(
+            record["raw_prediction"] + record["postprocess_adjustment"],
+            record["model_prediction"],
             places=5,
         )
         self.assertTrue(self.payload["feature_catalog"]["qty_lag_1"]["label"])

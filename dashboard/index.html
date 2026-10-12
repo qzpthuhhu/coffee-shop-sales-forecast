@@ -412,7 +412,7 @@ tbody tr:hover { background:#faf9f6; }
             <div class="panel-head">
               <div>
                 <h2>SHAP 瀑布图</h2>
-                <p class="panel-kicker">基准值 + 44 项贡献 = 原始模型输出；非负裁剪作为独立后处理展示</p>
+                <p class="panel-kicker">基准值 + 44 项贡献 = 原始模型输出；非负裁剪与门店偏差校准均独立展示</p>
               </div>
             </div>
             <div class="waterfall" id="waterfall"></div>
@@ -806,7 +806,10 @@ function renderWaterfall(record) {
   });
   steps.push({ label:'原始模型输出', meta:`加法误差 ${record.additivity_error}`, start:record.raw_prediction, end:record.raw_prediction, value:record.raw_prediction, kind:'final' });
   if (Math.abs(record.postprocess_adjustment) > 1e-9) {
-    steps.push({ label:'非负后处理', meta:'独立于 SHAP', start:record.raw_prediction, end:record.prediction, value:record.postprocess_adjustment, kind:'increase' });
+    steps.push({ label:'非负后处理', meta:'独立于 SHAP', start:record.raw_prediction, end:record.model_prediction, value:record.postprocess_adjustment, kind:'increase' });
+  }
+  if (Math.abs(record.store_bias_adjustment) > 1e-9) {
+    steps.push({ label:'门店偏差校准', meta:`前置窗口因子 ×${fmt(record.store_bias_factor,3)}`, start:record.model_prediction, end:record.prediction, value:record.store_bias_adjustment, kind:record.store_bias_adjustment >= 0 ? 'increase' : 'decrease' });
   }
   steps.push({ label:'最终点预测', meta:'页面使用值', start:record.prediction, end:record.prediction, value:record.prediction, kind:'final' });
   const values = steps.flatMap(step => [step.start, step.end, 0]);

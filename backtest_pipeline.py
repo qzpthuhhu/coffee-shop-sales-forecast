@@ -27,7 +27,7 @@ from predict_pipeline import (
 
 REPORT_DIR = DATA_DIR / "reports" / "model_quality"
 BACKTEST_WINDOW_COUNT = 5
-PIPELINE_VERSION = "rolling-backtest-v4-conformal-intervals"
+PIPELINE_VERSION = "rolling-backtest-v5-store-bias-calibration"
 ENTITY_KEYS = ["store_id", "product_id"]
 HISTORY_FEATURE_COLS = (
     [f"qty_lag_{lag}" for lag in HISTORY_LAGS]
@@ -51,6 +51,9 @@ QUANTILE_LEVELS = {
 }
 INTERVAL_TARGET_COVERAGE = 0.80
 SHAP_ADDITIVITY_TOLERANCE = 1e-6
+STORE_BIAS_SHRINKAGE = 0.50
+STORE_BIAS_FACTOR_MIN = 0.85
+STORE_BIAS_FACTOR_MAX = 1.20
 
 
 def build_model_run_id(
@@ -69,6 +72,11 @@ def build_model_run_id(
         "parameters": LIGHTGBM_PARAMS,
         "quantile_levels": QUANTILE_LEVELS,
         "interval_target_coverage": INTERVAL_TARGET_COVERAGE,
+        "store_bias_calibration": {
+            "shrinkage": STORE_BIAS_SHRINKAGE,
+            "minimum_factor": STORE_BIAS_FACTOR_MIN,
+            "maximum_factor": STORE_BIAS_FACTOR_MAX,
+        },
     }
     digest = hashlib.sha256(
         json.dumps(run_contract, sort_keys=True).encode("utf-8")
@@ -221,6 +229,7 @@ def recursive_forecast(
     origin,
     horizon,
     quantile_models=None,
+    store_bias_factors=None,
     model_run_id=None,
     include_explanations=False,
 ):
@@ -285,6 +294,11 @@ def recursive_forecast(
             )
             quantiles.sort(axis=1)
             current[list(QUANTILE_LEVELS)] = quantiles
+        if store_bias_factors is not None:
+            current = apply_store_bias_calibration(
+                current,
+                store_bias_factors,
+            )
         forecast_rows.append(current)
 
         predicted = current[[*ENTITY_KEYS, "pred_lightgbm"]].rename(
@@ -303,6 +317,96 @@ def recursive_forecast(
     if include_explanations:
         return forecasts, pd.concat(explanation_rows, ignore_index=True)
     return forecasts
+
+
+def calculate_store_bias_factors(
+    calibration_forecast,
+    shrinkage=STORE_BIAS_SHRINKAGE,
+    minimum_factor=STORE_BIAS_FACTOR_MIN,
+    maximum_factor=STORE_BIAS_FACTOR_MAX,
+):
+    """Estimate leakage-safe store factors from a pre-origin calibration window."""
+    required_columns = {"store_id", "qty", "pred_lightgbm"}
+    missing = required_columns.difference(calibration_forecast.columns)
+    if missing:
+        raise ValueError(f"Missing store calibration columns: {sorted(missing)}")
+    if not 0 <= shrinkage <= 1:
+        raise ValueError("shrinkage must be between 0 and 1")
+    if minimum_factor <= 0 or maximum_factor < minimum_factor:
+        raise ValueError("Store factor bounds must be positive and ordered")
+
+    factors = (
+        calibration_forecast.groupby("store_id", as_index=False)
+        .agg(
+            calibration_actual=("qty", "sum"),
+            calibration_prediction=("pred_lightgbm", "sum"),
+            calibration_sample_count=("qty", "size"),
+        )
+        .sort_values("store_id")
+        .reset_index(drop=True)
+    )
+    valid_prediction = (
+        np.isfinite(factors["calibration_prediction"])
+        & (factors["calibration_prediction"] > 0)
+        & np.isfinite(factors["calibration_actual"])
+    )
+    factors["store_bias_ratio_raw"] = 1.0
+    factors.loc[valid_prediction, "store_bias_ratio_raw"] = (
+        factors.loc[valid_prediction, "calibration_actual"]
+        / factors.loc[valid_prediction, "calibration_prediction"]
+    )
+    shrunk = 1 + shrinkage * (factors["store_bias_ratio_raw"] - 1)
+    factors["store_bias_factor"] = shrunk.clip(
+        lower=minimum_factor,
+        upper=maximum_factor,
+    )
+    return factors
+
+
+def apply_store_bias_calibration(forecast, store_bias_factors):
+    """Apply store factors to point and quantile forecasts with audit columns."""
+    required_columns = {"store_id", "pred_lightgbm"}
+    missing = required_columns.difference(forecast.columns)
+    if missing:
+        raise ValueError(f"Missing forecast columns: {sorted(missing)}")
+    factor_columns = {"store_id", "store_bias_factor"}
+    missing_factors = factor_columns.difference(store_bias_factors.columns)
+    if missing_factors:
+        raise ValueError(f"Missing store factor columns: {sorted(missing_factors)}")
+    if store_bias_factors["store_id"].duplicated().any():
+        raise ValueError("Store bias factors must be unique by store_id")
+
+    result = forecast.merge(
+        store_bias_factors[["store_id", "store_bias_factor"]],
+        on="store_id",
+        how="left",
+        validate="many_to_one",
+    )
+    result["store_bias_factor"] = result["store_bias_factor"].fillna(1.0)
+    if (
+        ~np.isfinite(result["store_bias_factor"])
+        | (result["store_bias_factor"] <= 0)
+    ).any():
+        raise ValueError("Store bias factors must be finite and positive")
+
+    result["pred_lightgbm_model"] = result["pred_lightgbm"]
+    result["pred_lightgbm"] = (
+        result["pred_lightgbm_model"] * result["store_bias_factor"]
+    )
+    result["store_bias_adjustment"] = (
+        result["pred_lightgbm"] - result["pred_lightgbm_model"]
+    )
+    quantile_columns = [
+        column for column in QUANTILE_LEVELS if column in result.columns
+    ]
+    if quantile_columns:
+        scaled_quantiles = (
+            result[quantile_columns].to_numpy(dtype=float)
+            * result["store_bias_factor"].to_numpy(dtype=float)[:, None]
+        )
+        scaled_quantiles.sort(axis=1)
+        result[quantile_columns] = scaled_quantiles
+    return result
 
 
 def calculate_conformal_adjustment(
@@ -536,6 +640,17 @@ def run_rolling_backtest(
             horizon,
         )
         calibration_start = calibration_df["date"].min()
+        calibration_forecast_raw = recursive_forecast(
+            model,
+            df,
+            feature_cols,
+            calibration_start,
+            horizon,
+            quantile_models=quantile_models,
+        )
+        store_bias_factors = calculate_store_bias_factors(
+            calibration_forecast_raw
+        )
         calibration_forecast = recursive_forecast(
             model,
             df,
@@ -543,6 +658,7 @@ def run_rolling_backtest(
             calibration_start,
             horizon,
             quantile_models=quantile_models,
+            store_bias_factors=store_bias_factors,
         )
         conformal_adjustment = calculate_conformal_adjustment(calibration_forecast)
         forecast, shap_contributions = recursive_forecast(
@@ -552,6 +668,7 @@ def run_rolling_backtest(
             origin,
             horizon,
             quantile_models=quantile_models,
+            store_bias_factors=store_bias_factors,
             model_run_id=run_id,
             include_explanations=True,
         )
@@ -573,6 +690,9 @@ def run_rolling_backtest(
                 "calibration_start": calibration_df["date"].min().date().isoformat(),
                 "calibration_end": calibration_df["date"].max().date().isoformat(),
                 "calibration_sample_count": len(calibration_forecast),
+                "store_bias_factors": store_bias_factors.to_dict(
+                    orient="records"
+                ),
                 "conformal_adjustment": conformal_adjustment,
                 "best_iteration": int(model.best_iteration_),
                 "quantile_best_iterations": {
@@ -608,8 +728,11 @@ def run_rolling_backtest(
         "prediction_error",
         "absolute_error",
         "pred_lightgbm_raw",
+        "pred_lightgbm_model",
         *PREDICTION_COLUMNS.values(),
         "postprocess_adjustment",
+        "store_bias_factor",
+        "store_bias_adjustment",
         *QUANTILE_LEVELS,
         "pred_p10_uncalibrated",
         "pred_p90_uncalibrated",
@@ -646,6 +769,18 @@ def run_rolling_backtest(
         "features": feature_cols,
         "parameters": LIGHTGBM_PARAMS,
         "quantile_levels": QUANTILE_LEVELS,
+        "store_bias_calibration": {
+            "method": "store aggregate actual-to-predicted ratio",
+            "calibration_window_days": horizon,
+            "shrinkage_toward_one": STORE_BIAS_SHRINKAGE,
+            "minimum_factor": STORE_BIAS_FACTOR_MIN,
+            "maximum_factor": STORE_BIAS_FACTOR_MAX,
+            "fallback_for_unseen_store": 1.0,
+            "applies_to": [
+                "pred_lightgbm",
+                *QUANTILE_LEVELS.keys(),
+            ],
+        },
         "interval_calibration": {
             "method": "split conformalized quantile regression",
             "target_coverage": INTERVAL_TARGET_COVERAGE,
@@ -674,8 +809,11 @@ def run_rolling_backtest(
                 predictions["shap_additivity_error"].abs().max()
             ),
             "postprocessing": (
-                "pred_lightgbm = max(0, pred_lightgbm_raw); "
-                "postprocess_adjustment is stored separately from SHAP"
+                "pred_lightgbm_model = max(0, pred_lightgbm_raw); "
+                "pred_lightgbm = pred_lightgbm_model * the pre-origin store "
+                "bias factor; "
+                "postprocess_adjustment and store_bias_adjustment are stored "
+                "separately from SHAP"
             ),
         },
         "artifacts": {
@@ -686,6 +824,7 @@ def run_rolling_backtest(
         "limitations": [
             "P10/P90 use split conformal calibration for marginal 80% coverage; P50 remains the raw median quantile.",
             "Conformal coverage is marginal over the calibration population and is not guaranteed for each store, SKU, or horizon day.",
+            "Store bias factors use only the seven days before each forecast origin, are shrunk toward one, and may not persist under abrupt demand shifts.",
             "This retrospective backtest covers five fixed seven-day origins only.",
             "TreeSHAP explains model output and feature association, not causal business impact.",
         ],

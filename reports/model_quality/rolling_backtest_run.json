@@ -1,7 +1,7 @@
 {
-  "run_id": "rolling_backtest_3a624df34b2e9713",
-  "pipeline_version": "rolling-backtest-v4-conformal-intervals",
-  "generated_at": "2026-10-11T23:06:42+00:00",
+  "run_id": "rolling_backtest_ea70bff8f3052ef9",
+  "pipeline_version": "rolling-backtest-v5-store-bias-calibration",
+  "generated_at": "2026-10-12T02:52:51+00:00",
   "model_name": "Global LightGBM (lightgbm.LGBMRegressor)",
   "candidate_status": "candidate",
   "candidate_rule": "Aggregate LightGBM MAE and WAPE must both beat the best origin-safe baseline",
@@ -86,6 +86,20 @@
     "pred_p50": 0.5,
     "pred_p90": 0.9
   },
+  "store_bias_calibration": {
+    "method": "store aggregate actual-to-predicted ratio",
+    "calibration_window_days": 7,
+    "shrinkage_toward_one": 0.5,
+    "minimum_factor": 0.85,
+    "maximum_factor": 1.2,
+    "fallback_for_unseen_store": 1.0,
+    "applies_to": [
+      "pred_lightgbm",
+      "pred_p10",
+      "pred_p50",
+      "pred_p90"
+    ]
+  },
   "interval_calibration": {
     "method": "split conformalized quantile regression",
     "target_coverage": 0.8,
@@ -121,7 +135,33 @@
       "calibration_start": "2023-05-20",
       "calibration_end": "2023-05-26",
       "calibration_sample_count": 1680,
-      "conformal_adjustment": 0.34930497136229954,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "calibration_actual": 3672,
+          "calibration_prediction": 3199.121005042482,
+          "calibration_sample_count": 560,
+          "store_bias_ratio_raw": 1.1478152887034163,
+          "store_bias_factor": 1.0739076443517082
+        },
+        {
+          "store_id": 5,
+          "calibration_actual": 4304,
+          "calibration_prediction": 3388.309851619282,
+          "calibration_sample_count": 560,
+          "store_bias_ratio_raw": 1.270249826161296,
+          "store_bias_factor": 1.135124913080648
+        },
+        {
+          "store_id": 8,
+          "calibration_actual": 3510,
+          "calibration_prediction": 3273.570246772719,
+          "calibration_sample_count": 560,
+          "store_bias_ratio_raw": 1.0722238215173074,
+          "store_bias_factor": 1.0361119107586538
+        }
+      ],
+      "conformal_adjustment": 0.1044786174923864,
       "best_iteration": 240,
       "quantile_best_iterations": {
         "pred_p10": 951,
@@ -138,7 +178,33 @@
       "calibration_start": "2023-05-27",
       "calibration_end": "2023-06-02",
       "calibration_sample_count": 1680,
-      "conformal_adjustment": 0.21028034489641279,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "calibration_actual": 3843,
+          "calibration_prediction": 3208.4892090681733,
+          "calibration_sample_count": 560,
+          "store_bias_ratio_raw": 1.197759989074766,
+          "store_bias_factor": 1.098879994537383
+        },
+        {
+          "store_id": 5,
+          "calibration_actual": 3527,
+          "calibration_prediction": 3457.984262399441,
+          "calibration_sample_count": 560,
+          "store_bias_ratio_raw": 1.0199583723821433,
+          "store_bias_factor": 1.0099791861910716
+        },
+        {
+          "store_id": 8,
+          "calibration_actual": 3328,
+          "calibration_prediction": 3332.3495130289757,
+          "calibration_sample_count": 560,
+          "store_bias_ratio_raw": 0.9986947608550755,
+          "store_bias_factor": 0.9993473804275377
+        }
+      ],
+      "conformal_adjustment": 0.14309388079509766,
       "best_iteration": 171,
       "quantile_best_iterations": {
         "pred_p10": 540,
@@ -155,7 +221,33 @@
       "calibration_start": "2023-06-03",
       "calibration_end": "2023-06-09",
       "calibration_sample_count": 1680,
-      "conformal_adjustment": 0.49531239375300373,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "calibration_actual": 3730,
+          "calibration_prediction": 3242.527799313422,
+          "calibration_sample_count": 560,
+          "store_bias_ratio_raw": 1.150337092187705,
+          "store_bias_factor": 1.0751685460938525
+        },
+        {
+          "store_id": 5,
+          "calibration_actual": 3573,
+          "calibration_prediction": 3359.416606625238,
+          "calibration_sample_count": 560,
+          "store_bias_ratio_raw": 1.0635775250242991,
+          "store_bias_factor": 1.0317887625121496
+        },
+        {
+          "store_id": 8,
+          "calibration_actual": 4047,
+          "calibration_prediction": 3383.9888706202064,
+          "calibration_sample_count": 560,
+          "store_bias_ratio_raw": 1.1959259190052476,
+          "store_bias_factor": 1.097962959502624
+        }
+      ],
+      "conformal_adjustment": 0.22122664807781156,
       "best_iteration": 245,
       "quantile_best_iterations": {
         "pred_p10": 397,
@@ -172,7 +264,33 @@
       "calibration_start": "2023-06-10",
       "calibration_end": "2023-06-16",
       "calibration_sample_count": 1680,
-      "conformal_adjustment": 0.18993408734570494,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "calibration_actual": 3701,
+          "calibration_prediction": 3512.14218833627,
+          "calibration_sample_count": 560,
+          "store_bias_ratio_raw": 1.0537728262514319,
+          "store_bias_factor": 1.026886413125716
+        },
+        {
+          "store_id": 5,
+          "calibration_actual": 4003,
+          "calibration_prediction": 3586.3756238472633,
+          "calibration_sample_count": 560,
+          "store_bias_ratio_raw": 1.1161686392753822,
+          "store_bias_factor": 1.058084319637691
+        },
+        {
+          "store_id": 8,
+          "calibration_actual": 4479,
+          "calibration_prediction": 3676.67112547866,
+          "calibration_sample_count": 560,
+          "store_bias_ratio_raw": 1.2182215507286869,
+          "store_bias_factor": 1.1091107753643434
+        }
+      ],
+      "conformal_adjustment": 0.024526198261733967,
       "best_iteration": 512,
       "quantile_best_iterations": {
         "pred_p10": 280,
@@ -189,7 +307,33 @@
       "calibration_start": "2023-06-17",
       "calibration_end": "2023-06-23",
       "calibration_sample_count": 1680,
-      "conformal_adjustment": 0.09056423189423524,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "calibration_actual": 3996,
+          "calibration_prediction": 3505.4122817509824,
+          "calibration_sample_count": 560,
+          "store_bias_ratio_raw": 1.1399515032234568,
+          "store_bias_factor": 1.0699757516117283
+        },
+        {
+          "store_id": 5,
+          "calibration_actual": 4154,
+          "calibration_prediction": 3738.744925506282,
+          "calibration_sample_count": 560,
+          "store_bias_ratio_raw": 1.1110680409515998,
+          "store_bias_factor": 1.0555340204758
+        },
+        {
+          "store_id": 8,
+          "calibration_actual": 3944,
+          "calibration_prediction": 3702.6206529269775,
+          "calibration_sample_count": 560,
+          "store_bias_ratio_raw": 1.0651914872462585,
+          "store_bias_factor": 1.0325957436231292
+        }
+      ],
+      "conformal_adjustment": 0.012295414170228744,
       "best_iteration": 435,
       "quantile_best_iterations": {
         "pred_p10": 956,
@@ -209,8 +353,8 @@
     "row_count": 8400,
     "contribution_count": 369600,
     "features_per_prediction": 44,
-    "maximum_absolute_additivity_error": 5.5067062021407764e-14,
-    "postprocessing": "pred_lightgbm = max(0, pred_lightgbm_raw); postprocess_adjustment is stored separately from SHAP"
+    "maximum_absolute_additivity_error": 5.861977570020827e-14,
+    "postprocessing": "pred_lightgbm_model = max(0, pred_lightgbm_raw); pred_lightgbm = pred_lightgbm_model * the pre-origin store bias factor; postprocess_adjustment and store_bias_adjustment are stored separately from SHAP"
   },
   "artifacts": {
     "predictions": "reports/model_quality/rolling_backtest_predictions.csv",
@@ -220,6 +364,7 @@
   "limitations": [
     "P10/P90 use split conformal calibration for marginal 80% coverage; P50 remains the raw median quantile.",
     "Conformal coverage is marginal over the calibration population and is not guaranteed for each store, SKU, or horizon day.",
+    "Store bias factors use only the seven days before each forecast origin, are shrunk toward one, and may not persist under abrupt demand shifts.",
     "This retrospective backtest covers five fixed seven-day origins only.",
     "TreeSHAP explains model output and feature association, not causal business impact."
   ]

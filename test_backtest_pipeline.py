@@ -10,11 +10,16 @@ from backtest_pipeline import (
     HISTORY_FEATURE_COLS,
     INTERVAL_TARGET_COVERAGE,
     SHAP_ADDITIVITY_TOLERANCE,
+    STORE_BIAS_FACTOR_MAX,
+    STORE_BIAS_FACTOR_MIN,
+    STORE_BIAS_SHRINKAGE,
     apply_conformal_adjustment,
+    apply_store_bias_calibration,
     add_origin_safe_baselines,
     add_prediction_identity,
     build_quality_report,
     calculate_conformal_adjustment,
+    calculate_store_bias_factors,
     explain_tree_predictions,
     recursive_forecast,
     select_backtest_origins,
@@ -77,6 +82,9 @@ class RollingBacktestTest(unittest.TestCase):
                 "pred_p10_uncalibrated",
                 "pred_p90_uncalibrated",
                 "conformal_adjustment",
+                "pred_lightgbm_model",
+                "store_bias_factor",
+                "store_bias_adjustment",
             }.issubset(predictions.columns)
         )
         self.assertFalse((predictions["pred_p10"] > predictions["pred_p50"]).any())
@@ -141,6 +149,7 @@ class RollingBacktestTest(unittest.TestCase):
             predictions["base_value"]
             + predictions["shap_sum"]
             + predictions["postprocess_adjustment"]
+            + predictions["store_bias_adjustment"]
         )
         np.testing.assert_allclose(
             reconstructed,
@@ -151,6 +160,24 @@ class RollingBacktestTest(unittest.TestCase):
         self.assertEqual(
             metadata["artifacts"]["shap_contributions"],
             "reports/model_quality/rolling_backtest_shap.csv.gz",
+        )
+        self.assertEqual(
+            metadata["store_bias_calibration"]["shrinkage_toward_one"],
+            STORE_BIAS_SHRINKAGE,
+        )
+        self.assertEqual(
+            metadata["store_bias_calibration"]["minimum_factor"],
+            STORE_BIAS_FACTOR_MIN,
+        )
+        self.assertEqual(
+            metadata["store_bias_calibration"]["maximum_factor"],
+            STORE_BIAS_FACTOR_MAX,
+        )
+        self.assertTrue(
+            all(
+                len(training_run["store_bias_factors"]) == 3
+                for training_run in metadata["training_runs"]
+            )
         )
 
     def test_prediction_ids_are_stable_and_entity_specific(self):
@@ -311,6 +338,98 @@ class RollingBacktestTest(unittest.TestCase):
         pd.testing.assert_frame_equal(
             baseline[["pred_p10", "pred_p50", "pred_p90"]],
             candidate[["pred_p10", "pred_p50", "pred_p90"]],
+        )
+
+    def test_store_bias_factors_are_shrunk_and_clipped(self):
+        calibration = pd.DataFrame(
+            {
+                "store_id": [1, 1, 2, 2],
+                "qty": [60.0, 60.0, 100.0, 100.0],
+                "pred_lightgbm": [50.0, 50.0, 50.0, 50.0],
+            }
+        )
+
+        factors = calculate_store_bias_factors(calibration)
+
+        factor_by_store = factors.set_index("store_id")
+        self.assertAlmostEqual(
+            factor_by_store.loc[1, "store_bias_ratio_raw"],
+            1.2,
+        )
+        self.assertAlmostEqual(
+            factor_by_store.loc[1, "store_bias_factor"],
+            1.1,
+        )
+        self.assertAlmostEqual(
+            factor_by_store.loc[2, "store_bias_factor"],
+            STORE_BIAS_FACTOR_MAX,
+        )
+
+    def test_store_bias_calibration_scales_outputs_and_defaults_unseen_store(self):
+        forecast = pd.DataFrame(
+            {
+                "store_id": [1, 2],
+                "pred_lightgbm": [10.0, 20.0],
+                "pred_p10": [8.0, 18.0],
+                "pred_p50": [10.0, 20.0],
+                "pred_p90": [12.0, 22.0],
+            }
+        )
+        factors = pd.DataFrame(
+            {
+                "store_id": [1],
+                "store_bias_factor": [1.1],
+            }
+        )
+
+        calibrated = apply_store_bias_calibration(forecast, factors)
+
+        np.testing.assert_allclose(calibrated["store_bias_factor"], [1.1, 1.0])
+        np.testing.assert_allclose(calibrated["pred_lightgbm_model"], [10, 20])
+        np.testing.assert_allclose(calibrated["pred_lightgbm"], [11, 20])
+        np.testing.assert_allclose(
+            calibrated["store_bias_adjustment"],
+            [1, 0],
+        )
+        np.testing.assert_allclose(calibrated["pred_p10"], [8.8, 18])
+        np.testing.assert_allclose(calibrated["pred_p50"], [11, 20])
+        np.testing.assert_allclose(calibrated["pred_p90"], [13.2, 22])
+        self.assertTrue(
+            (calibrated["pred_p10"] <= calibrated["pred_p50"]).all()
+        )
+        self.assertTrue(
+            (calibrated["pred_p50"] <= calibrated["pred_p90"]).all()
+        )
+
+    def test_store_calibrated_recursive_forecast_ignores_target_labels(self):
+        origin = pd.Timestamp("2023-02-12")
+        source = add_history_features(make_panel())
+        mutated = source.copy()
+        mutated.loc[mutated["date"] >= origin, "qty"] += 100_000
+        factors = pd.DataFrame(
+            {"store_id": [1], "store_bias_factor": [1.1]}
+        )
+
+        baseline = recursive_forecast(
+            LagOneModel(),
+            source,
+            ["qty_lag_1"],
+            origin,
+            horizon=2,
+            store_bias_factors=factors,
+        )
+        candidate = recursive_forecast(
+            LagOneModel(),
+            mutated,
+            ["qty_lag_1"],
+            origin,
+            horizon=2,
+            store_bias_factors=factors,
+        )
+
+        np.testing.assert_allclose(
+            baseline["pred_lightgbm"],
+            candidate["pred_lightgbm"],
         )
 
     def test_conformal_adjustment_uses_finite_sample_quantile(self):

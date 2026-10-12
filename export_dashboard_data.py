@@ -407,12 +407,18 @@ def build_explanation_shards(predictions, shap_contributions, generated_at):
                 "actual": _round(row.qty, 3),
                 "prediction": _round(row.pred_lightgbm, 6),
                 "raw_prediction": _round(row.pred_lightgbm_raw, 6),
+                "model_prediction": _round(row.pred_lightgbm_model, 6),
                 "p10": _round(row.pred_p10, 6),
                 "p50": _round(row.pred_p50, 6),
                 "p90": _round(row.pred_p90, 6),
                 "error": _round(row.prediction_error, 6),
                 "base_value": _round(row.base_value, 6),
                 "postprocess_adjustment": _round(row.postprocess_adjustment, 6),
+                "store_bias_factor": _round(row.store_bias_factor, 6),
+                "store_bias_adjustment": _round(
+                    row.store_bias_adjustment,
+                    6,
+                ),
                 "additivity_error": _round(row.shap_additivity_error, 12),
                 "contributions": detail,
             })
