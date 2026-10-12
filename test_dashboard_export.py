@@ -168,6 +168,10 @@ class DashboardExportTest(unittest.TestCase):
         self.assertIn("误差分布", html)
         self.assertIn("SKU × 日期需求热力图", html)
         self.assertIn("data-heatmap-row", html)
+        self.assertIn("销量日历", html)
+        self.assertIn('id="calendar-store"', html)
+        self.assertIn('id="sales-calendar"', html)
+        self.assertIn("function renderCalendar()", html)
 
 
 if __name__ == "__main__":

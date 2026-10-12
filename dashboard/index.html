@@ -111,6 +111,39 @@ button:focus-visible,select:focus-visible,a:focus-visible {
   background:linear-gradient(90deg,#eef4f7,#a9c5d3,#63806a,#b4463e);
 }
 .heatmap-empty { padding:32px; color:var(--muted); text-align:center; }
+.calendar-grid {
+  display:grid; grid-template-columns:repeat(7,minmax(0,1fr));
+  gap:6px;
+}
+.calendar-weekday {
+  padding:0 6px 4px; color:var(--muted); font-size:11px;
+  font-weight:650; text-align:right;
+}
+.calendar-day {
+  min-height:112px; padding:9px; border:1px solid var(--line);
+  background:#fcfbf8; display:flex; flex-direction:column; gap:4px;
+}
+.calendar-day.outside { visibility:hidden; }
+.calendar-day.under { border-top:3px solid var(--cherry); background:var(--red-soft); }
+.calendar-day.over { border-top:3px solid var(--blue); background:var(--blue-soft); }
+.calendar-day.close { border-top:3px solid var(--sage); background:var(--sage-soft); }
+.calendar-date {
+  display:flex; justify-content:space-between; gap:8px; align-items:baseline;
+  color:var(--coffee); font-size:13px; font-weight:750;
+}
+.calendar-date span { color:var(--muted); font-size:10px; font-weight:500; }
+.calendar-values { margin-top:auto; display:grid; gap:2px; font-size:11px; }
+.calendar-values div { display:flex; justify-content:space-between; gap:8px; }
+.calendar-values span { color:var(--muted); }
+.calendar-values strong { font-variant-numeric:tabular-nums; }
+.calendar-error { padding-top:3px; border-top:1px solid rgba(51,40,33,.12); }
+.calendar-empty { grid-column:1/-1; padding:32px; color:var(--muted); text-align:center; }
+.calendar-legend { display:flex; flex-wrap:wrap; gap:14px; }
+.calendar-legend span { display:flex; align-items:center; gap:6px; }
+.calendar-swatch { width:9px; height:9px; display:inline-block; }
+.calendar-swatch.under { background:var(--cherry); }
+.calendar-swatch.close { background:var(--sage); }
+.calendar-swatch.over { background:var(--blue); }
 .controls { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
 .field { display:flex; flex-direction:column; gap:5px; min-width:140px; }
 .field label { color:var(--muted); font-size:12px; font-weight:650; }
@@ -222,6 +255,9 @@ tbody tr:hover { background:#faf9f6; }
   .controls,.controls .field { width:100%; }
   .controls select { width:100%; }
   .chart-wrap { height:300px; }
+  .calendar-grid { grid-template-columns:repeat(7,82px); min-width:604px; }
+  .calendar-scroll { overflow-x:auto; padding-bottom:4px; }
+  .calendar-day { min-height:104px; padding:7px; }
   .explain-layout { grid-template-columns:1fr; }
   .filter-panel { position:static; }
   .filter-stack { grid-template-columns:repeat(2,minmax(0,1fr)); }
@@ -327,6 +363,32 @@ tbody tr:hover { background:#faf9f6; }
         <span id="heatmap-range">--</span>
         <span class="heatmap-legend"><span>低</span><span class="heatmap-ramp"></span><span>高</span></span>
         <span>单元格颜色仅表示当前筛选范围内的相对需求</span>
+      </div>
+    </section>
+
+    <section class="panel" style="margin-top:16px">
+      <div class="panel-head">
+        <div>
+          <h2>销量日历</h2>
+          <p class="panel-kicker" id="calendar-note">实际与预测日总量，单位：杯；误差 = 实际值 - 预测值</p>
+        </div>
+        <div class="controls">
+          <div class="field">
+            <label for="calendar-store">门店</label>
+            <select id="calendar-store"></select>
+          </div>
+        </div>
+      </div>
+      <div class="calendar-scroll">
+        <div class="calendar-grid" id="sales-calendar" aria-label="实际销量与预测销量日历"></div>
+      </div>
+      <div class="diagnostic-summary">
+        <span id="calendar-range">--</span>
+        <span class="calendar-legend">
+          <span><i class="calendar-swatch under"></i>低估风险</span>
+          <span><i class="calendar-swatch close"></i>误差 ±5% 内</span>
+          <span><i class="calendar-swatch over"></i>高估</span>
+        </span>
       </div>
     </section>
 
@@ -587,6 +649,70 @@ function renderHeatmap() {
       button.dataset.heatmapDate
     ));
   });
+}
+
+function initializeCalendar() {
+  const stores = Object.keys(DATA.store_predictions);
+  setOptions(
+    byId('calendar-store'),
+    ['__all__', ...stores],
+    value => value === '__all__' ? '全部门店' : value
+  );
+  byId('calendar-store').addEventListener('change', renderCalendar);
+  renderCalendar();
+}
+
+function calendarRows() {
+  const store = byId('calendar-store').value;
+  if (store === '__all__') return DATA.daily_predictions;
+  const series = DATA.store_predictions[store];
+  if (!series) return [];
+  return series.dates.map((date, index) => ({
+    date,
+    actual:series.actual[index],
+    pred:series.pred[index],
+    error:series.actual[index] - series.pred[index]
+  }));
+}
+
+function renderCalendar() {
+  const rows = calendarRows();
+  const calendar = byId('sales-calendar');
+  if (!rows.length) {
+    calendar.innerHTML = '<div class="calendar-empty">当前门店没有日级销量数据。</div>';
+    byId('calendar-range').textContent = '无可用日期';
+    return;
+  }
+  const weekdays = ['一','二','三','四','五','六','日'];
+  const firstDate = new Date(`${rows[0].date}T00:00:00`);
+  const leadingDays = (firstDate.getDay() + 6) % 7;
+  const headers = weekdays.map(day => `<div class="calendar-weekday">周${day}</div>`).join('');
+  const placeholders = Array.from(
+    { length:leadingDays },
+    () => '<div class="calendar-day outside" aria-hidden="true"></div>'
+  ).join('');
+  const days = rows.map(row => {
+    const error = row.actual - row.pred;
+    const errorRate = row.actual ? error / row.actual * 100 : 0;
+    const state = errorRate > 5 ? 'under' : errorRate < -5 ? 'over' : 'close';
+    const stateLabel = state === 'under' ? '低估风险' : state === 'over' ? '高估' : '误差在正负 5% 内';
+    const label = `${row.date}，实际 ${fmt(row.actual,1)} 杯，预测 ${fmt(row.pred,1)} 杯，误差 ${error >= 0 ? '+' : ''}${fmt(error,1)} 杯，${stateLabel}`;
+    return `
+      <article class="calendar-day ${state}" aria-label="${esc(label)}" title="${esc(label)}">
+        <div class="calendar-date">${esc(row.date.slice(5))}<span>${stateLabel}</span></div>
+        <div class="calendar-values">
+          <div><span>实际</span><strong>${fmt(row.actual,0)}</strong></div>
+          <div><span>预测</span><strong>${fmt(row.pred,0)}</strong></div>
+          <div class="calendar-error"><span>误差</span><strong>${error >= 0 ? '+' : ''}${fmt(error,0)}</strong></div>
+        </div>
+      </article>`;
+  }).join('');
+  calendar.innerHTML = headers + placeholders + days;
+  const storeLabel = byId('calendar-store').value === '__all__'
+    ? '全部门店'
+    : byId('calendar-store').value;
+  byId('calendar-note').textContent = `${storeLabel}实际与预测日总量，单位：杯；误差 = 实际值 - 预测值`;
+  byId('calendar-range').textContent = `${rows[0].date} 至 ${rows.at(-1).date} · ${rows.length} 天`;
 }
 
 function renderDiagnostics() {
@@ -884,6 +1010,7 @@ async function init() {
     updateEntityOptions();
     renderFeatureImportance();
     initializeHeatmap();
+    initializeCalendar();
     renderDiagnostics();
     renderErrorTable();
     initializeFilters();
