@@ -1,0 +1,305 @@
+{
+  "experiment_version": "sparse-expert-v1",
+  "generated_at": "2026-10-12T08:42:48+00:00",
+  "production_model_changed": false,
+  "description": "Separate direct_tweedie_1_3 models for sparse and dense SKUs; routing by pre-first-origin zero_rate and ADI.",
+  "origins": [
+    "2023-05-27",
+    "2023-06-03",
+    "2023-06-10",
+    "2023-06-17",
+    "2023-06-24"
+  ],
+  "forecast_horizon_days": 7,
+  "sparse_sku_count": 77,
+  "total_sku_count": 240,
+  "feature_count": 49,
+  "baseline_method": "direct_tweedie_1_3",
+  "expert_method": "sparse_expert",
+  "sku_coverage": {
+    "total_skus": 240,
+    "improved_skus": 92,
+    "sparse_sdku_improved": 0,
+    "dense_sku_improved": 49,
+    "sparse_sku_improved": 43
+  },
+  "eligible_methods": [],
+  "recommended_candidate": null,
+  "training_runs": [
+    {
+      "forecast_origin": "2023-05-27",
+      "method": "sparse_expert",
+      "group": "sparse",
+      "fit_end": "2023-05-12",
+      "validation_start": "2023-05-13",
+      "validation_end": "2023-05-19",
+      "best_iteration": 134,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.057539997095898
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.1040206293101202
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.0145319446650511
+        }
+      ],
+      "sparse_fit_rows": 54439,
+      "dense_fit_rows": 115241,
+      "sparse_test_rows": 539,
+      "dense_test_rows": 1141
+    },
+    {
+      "forecast_origin": "2023-05-27",
+      "method": "sparse_expert",
+      "group": "dense",
+      "fit_end": "2023-05-12",
+      "validation_start": "2023-05-13",
+      "validation_end": "2023-05-19",
+      "best_iteration": 138,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.057539997095898
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.1040206293101202
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.0145319446650511
+        }
+      ],
+      "sparse_fit_rows": 54439,
+      "dense_fit_rows": 115241,
+      "sparse_test_rows": 539,
+      "dense_test_rows": 1141
+    },
+    {
+      "forecast_origin": "2023-06-03",
+      "method": "sparse_expert",
+      "group": "sparse",
+      "fit_end": "2023-05-19",
+      "validation_start": "2023-05-20",
+      "validation_end": "2023-05-26",
+      "best_iteration": 141,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.0849087363577716
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0430464725383906
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.0201159592461748
+        }
+      ],
+      "sparse_fit_rows": 58212,
+      "dense_fit_rows": 123228,
+      "sparse_test_rows": 539,
+      "dense_test_rows": 1141
+    },
+    {
+      "forecast_origin": "2023-06-03",
+      "method": "sparse_expert",
+      "group": "dense",
+      "fit_end": "2023-05-19",
+      "validation_start": "2023-05-20",
+      "validation_end": "2023-05-26",
+      "best_iteration": 475,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.0849087363577716
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0430464725383906
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.0201159592461748
+        }
+      ],
+      "sparse_fit_rows": 58212,
+      "dense_fit_rows": 123228,
+      "sparse_test_rows": 539,
+      "dense_test_rows": 1141
+    },
+    {
+      "forecast_origin": "2023-06-10",
+      "method": "sparse_expert",
+      "group": "sparse",
+      "fit_end": "2023-05-26",
+      "validation_start": "2023-05-27",
+      "validation_end": "2023-06-02",
+      "best_iteration": 145,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.066005128370219
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0171884928653634
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.0629983760474422
+        }
+      ],
+      "sparse_fit_rows": 61985,
+      "dense_fit_rows": 131215,
+      "sparse_test_rows": 539,
+      "dense_test_rows": 1141
+    },
+    {
+      "forecast_origin": "2023-06-10",
+      "method": "sparse_expert",
+      "group": "dense",
+      "fit_end": "2023-05-26",
+      "validation_start": "2023-05-27",
+      "validation_end": "2023-06-02",
+      "best_iteration": 310,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.066005128370219
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0171884928653634
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.0629983760474422
+        }
+      ],
+      "sparse_fit_rows": 61985,
+      "dense_fit_rows": 131215,
+      "sparse_test_rows": 539,
+      "dense_test_rows": 1141
+    },
+    {
+      "forecast_origin": "2023-06-17",
+      "method": "sparse_expert",
+      "group": "sparse",
+      "fit_end": "2023-06-02",
+      "validation_start": "2023-06-03",
+      "validation_end": "2023-06-09",
+      "best_iteration": 214,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 0.9879169920259512
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0032716809531403
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.0462856019006974
+        }
+      ],
+      "sparse_fit_rows": 65758,
+      "dense_fit_rows": 139202,
+      "sparse_test_rows": 539,
+      "dense_test_rows": 1141
+    },
+    {
+      "forecast_origin": "2023-06-17",
+      "method": "sparse_expert",
+      "group": "dense",
+      "fit_end": "2023-06-02",
+      "validation_start": "2023-06-03",
+      "validation_end": "2023-06-09",
+      "best_iteration": 269,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 0.9879169920259512
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0032716809531403
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.0462856019006974
+        }
+      ],
+      "sparse_fit_rows": 65758,
+      "dense_fit_rows": 139202,
+      "sparse_test_rows": 539,
+      "dense_test_rows": 1141
+    },
+    {
+      "forecast_origin": "2023-06-24",
+      "method": "sparse_expert",
+      "group": "sparse",
+      "fit_end": "2023-06-09",
+      "validation_start": "2023-06-10",
+      "validation_end": "2023-06-16",
+      "best_iteration": 165,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.0513524647799328
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0224340480476857
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.0140812455310388
+        }
+      ],
+      "sparse_fit_rows": 69531,
+      "dense_fit_rows": 147189,
+      "sparse_test_rows": 539,
+      "dense_test_rows": 1141
+    },
+    {
+      "forecast_origin": "2023-06-24",
+      "method": "sparse_expert",
+      "group": "dense",
+      "fit_end": "2023-06-09",
+      "validation_start": "2023-06-10",
+      "validation_end": "2023-06-16",
+      "best_iteration": 236,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.0513524647799328
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0224340480476857
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.0140812455310388
+        }
+      ],
+      "sparse_fit_rows": 69531,
+      "dense_fit_rows": 147189,
+      "sparse_test_rows": 539,
+      "dense_test_rows": 1141
+    }
+  ],
+  "artifacts": {
+    "predictions": "/Users/bytedance/Documents/门店预测kaggle数据/reports/model_quality/third_round/third_round_predictions.csv.gz",
+    "quality": "/Users/bytedance/Documents/门店预测kaggle数据/reports/model_quality/third_round/third_round_quality.csv",
+    "summary": "/Users/bytedance/Documents/门店预测kaggle数据/reports/model_quality/third_round/third_round_summary.csv"
+  }
+}

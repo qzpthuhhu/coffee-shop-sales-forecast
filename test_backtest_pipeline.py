@@ -15,6 +15,7 @@ from backtest_pipeline import (
     STORE_BIAS_SHRINKAGE,
     SCENARIO_BASELINE,
     apply_conformal_adjustment,
+    apply_kalman_fusion,
     apply_store_bias_calibration,
     add_origin_safe_baselines,
     add_prediction_identity,
@@ -23,8 +24,10 @@ from backtest_pipeline import (
     calculate_conformal_adjustment,
     calculate_store_bias_factors,
     explain_tree_predictions,
+    kalman_forecast,
     recursive_forecast,
     select_backtest_origins,
+    select_kalman_fusion_weight,
 )
 from predict_pipeline import add_history_features
 
@@ -97,6 +100,9 @@ class RollingBacktestTest(unittest.TestCase):
                 "pred_p90_uncalibrated",
                 "conformal_adjustment",
                 "pred_lightgbm_model",
+                "pred_kalman",
+                "pred_lightgbm_kalman",
+                "kalman_fusion_weight",
                 "store_bias_factor",
                 "store_bias_adjustment",
             }.issubset(predictions.columns)
@@ -217,6 +223,16 @@ class RollingBacktestTest(unittest.TestCase):
                 len(training_run["store_bias_factors"]) == 3
                 for training_run in metadata["training_runs"]
             )
+        )
+        self.assertTrue(
+            all(
+                0 <= training_run["kalman_fusion_weight"] <= 1
+                for training_run in metadata["training_runs"]
+            )
+        )
+        self.assertIn(
+            metadata["selected_point_forecast"],
+            {"pred_lightgbm", "pred_lightgbm_kalman"},
         )
 
     def test_prediction_ids_are_stable_and_entity_specific(self):
@@ -578,6 +594,77 @@ class RollingBacktestTest(unittest.TestCase):
         ]
         pd.testing.assert_frame_equal(baseline[columns], candidate[columns])
 
+    def test_kalman_forecast_ignores_future_labels(self):
+        origin = pd.Timestamp("2023-02-12")
+        source = make_panel()
+        mutated = source.copy()
+        mutated.loc[mutated["date"] >= origin, "qty"] += 100_000
+
+        baseline = kalman_forecast(source, origin, horizon=7)
+        candidate = kalman_forecast(mutated, origin, horizon=7)
+
+        pd.testing.assert_frame_equal(baseline, candidate)
+
+    def test_kalman_forecast_responds_to_recent_trend(self):
+        source = make_panel(days=56)
+        origin = pd.Timestamp("2023-02-19")
+        source["qty"] = (
+            source["date"] - source["date"].min()
+        ).dt.days.astype(float)
+
+        forecast = kalman_forecast(source, origin, horizon=3)
+        series = forecast[
+            (forecast["store_id"] == 1)
+            & (forecast["product_id"] == 101)
+        ].sort_values("date")
+
+        self.assertGreater(series["pred_kalman"].iloc[0], 45)
+        self.assertGreater(
+            series["pred_kalman"].iloc[-1],
+            series["pred_kalman"].iloc[0],
+        )
+
+    def test_kalman_fusion_weight_uses_calibration_errors(self):
+        calibration = pd.DataFrame(
+            {
+                "qty": [10.0, 20.0, 30.0],
+                "pred_lightgbm": [8.0, 18.0, 28.0],
+                "pred_kalman": [10.0, 20.0, 30.0],
+            }
+        )
+
+        weight, candidates = select_kalman_fusion_weight(
+            calibration,
+            weights=(0.0, 0.5, 1.0),
+        )
+
+        self.assertEqual(weight, 1.0)
+        self.assertEqual(len(candidates), 3)
+
+    def test_apply_kalman_fusion_preserves_component_predictions(self):
+        forecast = pd.DataFrame(
+            {
+                "date": pd.to_datetime(["2023-01-01"]),
+                "store_id": [1],
+                "product_id": [101],
+                "pred_lightgbm": [10.0],
+            }
+        )
+        kalman = pd.DataFrame(
+            {
+                "date": pd.to_datetime(["2023-01-01"]),
+                "store_id": [1],
+                "product_id": [101],
+                "pred_kalman": [14.0],
+            }
+        )
+
+        blended = apply_kalman_fusion(forecast, kalman, weight=0.25)
+
+        self.assertEqual(blended["pred_lightgbm"].iloc[0], 10.0)
+        self.assertEqual(blended["pred_kalman"].iloc[0], 14.0)
+        self.assertEqual(blended["pred_lightgbm_kalman"].iloc[0], 11.0)
+
     def test_quality_report_marks_model_only_when_it_beats_baselines(self):
         frame = pd.DataFrame(
             {
@@ -590,6 +677,8 @@ class RollingBacktestTest(unittest.TestCase):
                 "product_type": ["Brewed"] * 4,
                 "qty": [10, 12, 14, 16],
                 "pred_lightgbm": [10, 12, 14, 16],
+                "pred_kalman": [10, 12, 14, 16],
+                "pred_lightgbm_kalman": [10, 12, 14, 16],
                 "pred_p10": [8, 10, 12, 14],
                 "pred_p50": [10, 12, 14, 16],
                 "pred_p90": [12, 14, 16, 18],
@@ -599,13 +688,17 @@ class RollingBacktestTest(unittest.TestCase):
             }
         )
 
-        report, candidate = build_quality_report(frame)
+        report, candidate, fusion_candidate, fusion_window_wins = (
+            build_quality_report(frame)
+        )
         model_overall = report[
             (report["level"] == "overall")
             & (report["method"] == "lightgbm")
         ].iloc[0]
 
         self.assertTrue(candidate)
+        self.assertFalse(fusion_candidate)
+        self.assertEqual(fusion_window_wins, 0)
         self.assertTrue(model_overall["candidate_eligible"])
         self.assertEqual(model_overall["wape"], 0)
         self.assertEqual(model_overall["interval_coverage"], 1)

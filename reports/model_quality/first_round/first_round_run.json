@@ -1,0 +1,1010 @@
+{
+  "experiment_version": "direct-multi-horizon-v1",
+  "generated_at": "2026-10-12T08:06:31+00:00",
+  "production_model_changed": false,
+  "forecast_strategy": "Stacked direct multi-horizon models with shared parameters and an explicit forecast_horizon feature",
+  "origins": [
+    "2023-05-27",
+    "2023-06-03",
+    "2023-06-10",
+    "2023-06-17",
+    "2023-06-24"
+  ],
+  "forecast_horizon_days": 7,
+  "feature_count": 49,
+  "features": [
+    "price",
+    "qty_lag_1",
+    "qty_lag_2",
+    "qty_lag_3",
+    "qty_lag_7",
+    "qty_lag_14",
+    "qty_lag_28",
+    "qty_roll_mean_7d",
+    "qty_roll_std_7d",
+    "qty_roll_mean_14d",
+    "qty_roll_std_14d",
+    "qty_roll_mean_28d",
+    "qty_roll_std_28d",
+    "qty_dow_avg",
+    "sku_share_28d",
+    "day_of_week",
+    "is_weekend",
+    "month",
+    "day_of_month",
+    "week_of_month",
+    "is_month_start",
+    "is_month_end",
+    "season_code",
+    "week_of_season",
+    "temperature_2m_max",
+    "temperature_2m_min",
+    "temperature_2m_mean",
+    "precipitation_sum",
+    "is_rain",
+    "is_snow",
+    "is_clear",
+    "sunshine_duration",
+    "wind_speed_10m_max",
+    "relative_humidity_2m_mean",
+    "is_holiday_detailed",
+    "is_pre_holiday_1d",
+    "is_pre_holiday_3d",
+    "is_post_holiday_1d",
+    "is_long_weekend",
+    "holiday_impact_code",
+    "temp_range",
+    "is_hot",
+    "is_cold",
+    "price_vs_category_avg",
+    "store_id_feature",
+    "product_id_feature",
+    "category_code",
+    "product_type_code",
+    "forecast_horizon"
+  ],
+  "identity_features": [
+    "store_id_feature",
+    "product_id_feature",
+    "category_code",
+    "product_type_code"
+  ],
+  "lightgbm_experiments": {
+    "direct_l1": {
+      "objective": "regression_l1"
+    },
+    "direct_l2": {
+      "objective": "regression"
+    },
+    "direct_huber": {
+      "objective": "huber",
+      "alpha": 0.9
+    },
+    "direct_poisson": {
+      "objective": "poisson"
+    },
+    "direct_tweedie_1_1": {
+      "objective": "tweedie",
+      "tweedie_variance_power": 1.1
+    },
+    "direct_tweedie_1_3": {
+      "objective": "tweedie",
+      "tweedie_variance_power": 1.3
+    },
+    "direct_tweedie_1_5": {
+      "objective": "tweedie",
+      "tweedie_variance_power": 1.5
+    }
+  },
+  "catboost_parameters": {
+    "loss_function": "MAE",
+    "eval_metric": "MAE",
+    "iterations": 1000,
+    "learning_rate": 0.03,
+    "depth": 8,
+    "l2_leaf_reg": 3.0,
+    "random_seed": 42,
+    "thread_count": 4,
+    "verbose": false,
+    "allow_writing_files": false
+  },
+  "peak_threshold": 16.0,
+  "low_threshold": 1.0,
+  "promotion_rule": "Candidate must improve aggregate MAE, WAPE, and peak-segment MAE and beat recursive LightGBM MAE in at least three windows.",
+  "eligible_methods": [
+    "direct_tweedie_1_3",
+    "direct_tweedie_1_5",
+    "direct_tweedie_1_1",
+    "direct_poisson",
+    "direct_l1",
+    "direct_l2"
+  ],
+  "recommended_candidate": "direct_tweedie_1_3",
+  "training_runs": [
+    {
+      "forecast_origin": "2023-05-27",
+      "method": "direct_l1",
+      "fit_end": "2023-05-12",
+      "validation_start": "2023-05-13",
+      "validation_end": "2023-05-19",
+      "best_iteration": 301,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.0743305267154164
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.1119541645784086
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.0225593973591107
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-05-27",
+      "method": "direct_l2",
+      "fit_end": "2023-05-12",
+      "validation_start": "2023-05-13",
+      "validation_end": "2023-05-19",
+      "best_iteration": 167,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.0373168230880663
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0874072081806936
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 0.9803572302544696
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-05-27",
+      "method": "direct_huber",
+      "fit_end": "2023-05-12",
+      "validation_start": "2023-05-13",
+      "validation_end": "2023-05-19",
+      "best_iteration": 997,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.0737398018339084
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.1341414038523734
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.0168879685431085
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-05-27",
+      "method": "direct_poisson",
+      "fit_end": "2023-05-12",
+      "validation_start": "2023-05-13",
+      "validation_end": "2023-05-19",
+      "best_iteration": 367,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.059528105377537
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.1001422851818252
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.0157606801053658
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-05-27",
+      "method": "direct_tweedie_1_1",
+      "fit_end": "2023-05-12",
+      "validation_start": "2023-05-13",
+      "validation_end": "2023-05-19",
+      "best_iteration": 227,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.0585016641859084
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.091022492235653
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.0075876344048824
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-05-27",
+      "method": "direct_tweedie_1_3",
+      "fit_end": "2023-05-12",
+      "validation_start": "2023-05-13",
+      "validation_end": "2023-05-19",
+      "best_iteration": 238,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.041870114163959
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0818170568551868
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.005608997249718
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-05-27",
+      "method": "direct_tweedie_1_5",
+      "fit_end": "2023-05-12",
+      "validation_start": "2023-05-13",
+      "validation_end": "2023-05-19",
+      "best_iteration": 170,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.0560837259807618
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0881800010557565
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.0291111649920386
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-05-27",
+      "method": "direct_catboost",
+      "fit_end": "2023-05-12",
+      "validation_start": "2023-05-13",
+      "validation_end": "2023-05-19",
+      "best_iteration": 668,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.1000542996990286
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.1446115283053768
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.0618450883908193
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-03",
+      "method": "direct_l1",
+      "fit_end": "2023-05-19",
+      "validation_start": "2023-05-20",
+      "validation_end": "2023-05-26",
+      "best_iteration": 257,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.0847775006756537
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.041185800995986
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.0122187483924987
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-03",
+      "method": "direct_l2",
+      "fit_end": "2023-05-19",
+      "validation_start": "2023-05-20",
+      "validation_end": "2023-05-26",
+      "best_iteration": 227,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.050236729466962
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0091356758550545
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 0.9675689462369637
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-03",
+      "method": "direct_huber",
+      "fit_end": "2023-05-19",
+      "validation_start": "2023-05-20",
+      "validation_end": "2023-05-26",
+      "best_iteration": 916,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.0802155448660096
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0401893398654662
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 0.9929930238936429
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-03",
+      "method": "direct_poisson",
+      "fit_end": "2023-05-19",
+      "validation_start": "2023-05-20",
+      "validation_end": "2023-05-26",
+      "best_iteration": 439,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.0901891226996128
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0412830559034574
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.0101811512094248
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-03",
+      "method": "direct_tweedie_1_1",
+      "fit_end": "2023-05-19",
+      "validation_start": "2023-05-20",
+      "validation_end": "2023-05-26",
+      "best_iteration": 343,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.0767944261418565
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0339837743157951
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.0084661356910427
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-03",
+      "method": "direct_tweedie_1_3",
+      "fit_end": "2023-05-19",
+      "validation_start": "2023-05-20",
+      "validation_end": "2023-05-26",
+      "best_iteration": 214,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.0762677036562387
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0240561716027736
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 0.9958333916900259
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-03",
+      "method": "direct_tweedie_1_5",
+      "fit_end": "2023-05-19",
+      "validation_start": "2023-05-20",
+      "validation_end": "2023-05-26",
+      "best_iteration": 223,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.0734248668651007
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0401766631491554
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.013234690079169
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-03",
+      "method": "direct_catboost",
+      "fit_end": "2023-05-19",
+      "validation_start": "2023-05-20",
+      "validation_end": "2023-05-26",
+      "best_iteration": 455,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.1255728649401167
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0567893138007116
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.0419252334907172
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-10",
+      "method": "direct_l1",
+      "fit_end": "2023-05-26",
+      "validation_start": "2023-05-27",
+      "validation_end": "2023-06-02",
+      "best_iteration": 314,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.0841405111066567
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0383419875582163
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.0974770527505449
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-10",
+      "method": "direct_l2",
+      "fit_end": "2023-05-26",
+      "validation_start": "2023-05-27",
+      "validation_end": "2023-06-02",
+      "best_iteration": 206,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.0328379703446093
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 0.9947873584082709
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.0421100115213178
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-10",
+      "method": "direct_huber",
+      "fit_end": "2023-05-26",
+      "validation_start": "2023-05-27",
+      "validation_end": "2023-06-02",
+      "best_iteration": 707,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.1011648618700327
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0489749326234863
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.1094193448188001
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-10",
+      "method": "direct_poisson",
+      "fit_end": "2023-05-26",
+      "validation_start": "2023-05-27",
+      "validation_end": "2023-06-02",
+      "best_iteration": 573,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.0427170396770127
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0092065565795156
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.051579936894664
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-10",
+      "method": "direct_tweedie_1_1",
+      "fit_end": "2023-05-26",
+      "validation_start": "2023-05-27",
+      "validation_end": "2023-06-02",
+      "best_iteration": 227,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.037943624062791
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0061478895994984
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.04961349746528
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-10",
+      "method": "direct_tweedie_1_3",
+      "fit_end": "2023-05-26",
+      "validation_start": "2023-05-27",
+      "validation_end": "2023-06-02",
+      "best_iteration": 286,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.0490273996230401
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0156997940338455
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.0600126500762659
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-10",
+      "method": "direct_tweedie_1_5",
+      "fit_end": "2023-05-26",
+      "validation_start": "2023-05-27",
+      "validation_end": "2023-06-02",
+      "best_iteration": 208,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.0397271913325037
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0108822896439356
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.0601116662025558
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-10",
+      "method": "direct_catboost",
+      "fit_end": "2023-05-26",
+      "validation_start": "2023-05-27",
+      "validation_end": "2023-06-02",
+      "best_iteration": 229,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.097288287555092
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.056970974888978
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.1340730875495746
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-17",
+      "method": "direct_l1",
+      "fit_end": "2023-06-02",
+      "validation_start": "2023-06-03",
+      "validation_end": "2023-06-09",
+      "best_iteration": 269,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.0256022407626348
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0453523843130332
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.083899504083394
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-17",
+      "method": "direct_l2",
+      "fit_end": "2023-06-02",
+      "validation_start": "2023-06-03",
+      "validation_end": "2023-06-09",
+      "best_iteration": 681,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 0.9847119196348186
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 0.9935941107950724
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.024220504921166
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-17",
+      "method": "direct_huber",
+      "fit_end": "2023-06-02",
+      "validation_start": "2023-06-03",
+      "validation_end": "2023-06-09",
+      "best_iteration": 790,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.0249131915298944
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0386097225285245
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.0827546780720272
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-17",
+      "method": "direct_poisson",
+      "fit_end": "2023-06-02",
+      "validation_start": "2023-06-03",
+      "validation_end": "2023-06-09",
+      "best_iteration": 1000,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 0.9907111085101801
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 0.999065557240367
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.0369949227224216
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-17",
+      "method": "direct_tweedie_1_1",
+      "fit_end": "2023-06-02",
+      "validation_start": "2023-06-03",
+      "validation_end": "2023-06-09",
+      "best_iteration": 806,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.017913662109041
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0184206385207837
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.0469779438326405
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-17",
+      "method": "direct_tweedie_1_3",
+      "fit_end": "2023-06-02",
+      "validation_start": "2023-06-03",
+      "validation_end": "2023-06-09",
+      "best_iteration": 630,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.0123150537523773
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0092196893707714
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.0498426521550384
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-17",
+      "method": "direct_tweedie_1_5",
+      "fit_end": "2023-06-02",
+      "validation_start": "2023-06-03",
+      "validation_end": "2023-06-09",
+      "best_iteration": 564,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.0169769881654176
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0252339036530755
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.0556523779867892
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-17",
+      "method": "direct_catboost",
+      "fit_end": "2023-06-02",
+      "validation_start": "2023-06-03",
+      "validation_end": "2023-06-09",
+      "best_iteration": 825,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.0598915974644783
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0717314854013726
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.1160863922781237
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-24",
+      "method": "direct_l1",
+      "fit_end": "2023-06-09",
+      "validation_start": "2023-06-10",
+      "validation_end": "2023-06-16",
+      "best_iteration": 344,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.0635049142251571
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0535103593842
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.0218279952824338
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-24",
+      "method": "direct_l2",
+      "fit_end": "2023-06-09",
+      "validation_start": "2023-06-10",
+      "validation_end": "2023-06-16",
+      "best_iteration": 340,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.0395249292393411
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0076387039375927
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.000368309750641
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-24",
+      "method": "direct_huber",
+      "fit_end": "2023-06-09",
+      "validation_start": "2023-06-10",
+      "validation_end": "2023-06-16",
+      "best_iteration": 994,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.0739107123439493
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.050657917713662
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.0281522915919172
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-24",
+      "method": "direct_poisson",
+      "fit_end": "2023-06-09",
+      "validation_start": "2023-06-10",
+      "validation_end": "2023-06-16",
+      "best_iteration": 402,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.0441730133072598
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0187406098283573
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.0006277769445733
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-24",
+      "method": "direct_tweedie_1_1",
+      "fit_end": "2023-06-09",
+      "validation_start": "2023-06-10",
+      "validation_end": "2023-06-16",
+      "best_iteration": 577,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.045847295348004
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.013034313621862
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.0130839154905313
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-24",
+      "method": "direct_tweedie_1_3",
+      "fit_end": "2023-06-09",
+      "validation_start": "2023-06-10",
+      "validation_end": "2023-06-16",
+      "best_iteration": 209,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.0403715590218543
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0188779580827285
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.0067043580225845
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-24",
+      "method": "direct_tweedie_1_5",
+      "fit_end": "2023-06-09",
+      "validation_start": "2023-06-10",
+      "validation_end": "2023-06-16",
+      "best_iteration": 253,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.039048539118514
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.024202653219406
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.0063750378410028
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-24",
+      "method": "direct_catboost",
+      "fit_end": "2023-06-09",
+      "validation_start": "2023-06-10",
+      "validation_end": "2023-06-16",
+      "best_iteration": 259,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.0700606220688607
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0637805077966784
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.0364613102723885
+        }
+      ]
+    }
+  ],
+  "artifacts": {
+    "predictions": "/Users/bytedance/Documents/门店预测kaggle数据/reports/model_quality/first_round/first_round_predictions.csv.gz",
+    "quality": "/Users/bytedance/Documents/门店预测kaggle数据/reports/model_quality/first_round/first_round_quality.csv",
+    "summary": "/Users/bytedance/Documents/门店预测kaggle数据/reports/model_quality/first_round/first_round_summary.csv"
+  }
+}

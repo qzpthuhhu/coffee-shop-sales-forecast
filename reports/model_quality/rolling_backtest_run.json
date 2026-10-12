@@ -1,10 +1,40 @@
 {
-  "run_id": "rolling_backtest_489cdcab6f77c3cd",
-  "pipeline_version": "rolling-backtest-v6-scenario-response",
-  "generated_at": "2026-10-12T05:07:33+00:00",
+  "run_id": "rolling_backtest_1d29501e6d1f62da",
+  "pipeline_version": "rolling-backtest-v7-kalman-candidate",
+  "generated_at": "2026-10-12T08:08:57+00:00",
   "model_name": "Global LightGBM (lightgbm.LGBMRegressor)",
   "candidate_status": "candidate",
   "candidate_rule": "Aggregate LightGBM MAE and WAPE must both beat the best origin-safe baseline",
+  "selected_point_forecast": "pred_lightgbm",
+  "kalman_candidate_status": "experimental",
+  "kalman_promotion_rule": "Fusion must improve aggregate MAE and WAPE, not increase absolute mean error, and beat LightGBM MAE in at least three of five windows",
+  "kalman_fusion_window_wins": 0,
+  "kalman": {
+    "method": "Per-store-SKU damped local-linear-trend Kalman filter with shrunk weekday seasonal offsets",
+    "parameters": {
+      "history_days": 56,
+      "seasonal_shrinkage": 0.5,
+      "level_process_ratio": 0.15,
+      "trend_process_ratio": 0.01,
+      "trend_damping": 0.9,
+      "minimum_variance": 1.0
+    },
+    "candidate_weights": [
+      0.0,
+      0.1,
+      0.2,
+      0.30000000000000004,
+      0.4,
+      0.5,
+      0.6000000000000001,
+      0.7000000000000001,
+      0.8,
+      0.9,
+      1.0
+    ],
+    "weight_selection": "Minimum MAE on the seven-day pre-origin calibration window; ties prefer the lower Kalman weight",
+    "future_label_access": false
+  },
   "data_range": {
     "start": "2023-01-01",
     "end": "2023-06-30"
@@ -161,6 +191,64 @@
           "store_bias_factor": 1.0361119107586538
         }
       ],
+      "kalman_fusion_weight": 0.0,
+      "kalman_fusion_candidates": [
+        {
+          "weight": 0.0,
+          "mae": 2.7371451555126614,
+          "wape": 0.4003485862146327
+        },
+        {
+          "weight": 0.1,
+          "mae": 2.748009971735799,
+          "wape": 0.40193772875815276
+        },
+        {
+          "weight": 0.2,
+          "mae": 2.7685235217440463,
+          "wape": 0.4049381435251609
+        },
+        {
+          "weight": 0.30000000000000004,
+          "mae": 2.8007731335284682,
+          "wape": 0.4096551335824331
+        },
+        {
+          "weight": 0.4,
+          "mae": 2.846120062126056,
+          "wape": 0.41628780292284295
+        },
+        {
+          "weight": 0.5,
+          "mae": 2.8993128915197364,
+          "wape": 0.42406805308664086
+        },
+        {
+          "weight": 0.6000000000000001,
+          "mae": 2.9630429564846357,
+          "wape": 0.43338953220391674
+        },
+        {
+          "weight": 0.7000000000000001,
+          "mae": 3.038561257439883,
+          "wape": 0.4444352178738467
+        },
+        {
+          "weight": 0.8,
+          "mae": 3.1244048858757845,
+          "wape": 0.45699113775651384
+        },
+        {
+          "weight": 0.9,
+          "mae": 3.2173698657248737,
+          "wape": 0.47058866223383145
+        },
+        {
+          "weight": 1.0,
+          "mae": 3.316320938811012,
+          "wape": 0.48506174274791053
+        }
+      ],
       "conformal_adjustment": 0.1044786174923864,
       "best_iteration": 240,
       "quantile_best_iterations": {
@@ -202,6 +290,64 @@
           "calibration_sample_count": 560,
           "store_bias_ratio_raw": 0.9986947608550755,
           "store_bias_factor": 0.9993473804275377
+        }
+      ],
+      "kalman_fusion_weight": 0.0,
+      "kalman_fusion_candidates": [
+        {
+          "weight": 0.0,
+          "mae": 2.451046873555737,
+          "wape": 0.38490921177543824
+        },
+        {
+          "weight": 0.1,
+          "mae": 2.4528405446506873,
+          "wape": 0.38519088755030423
+        },
+        {
+          "weight": 0.2,
+          "mae": 2.4767435214350697,
+          "wape": 0.3889445799225011
+        },
+        {
+          "weight": 0.30000000000000004,
+          "mae": 2.5233727360281866,
+          "wape": 0.3962671711093058
+        },
+        {
+          "weight": 0.4,
+          "mae": 2.5867506015400874,
+          "wape": 0.4062199486434237
+        },
+        {
+          "weight": 0.5,
+          "mae": 2.6607595689201764,
+          "wape": 0.41784222058196824
+        },
+        {
+          "weight": 0.6000000000000001,
+          "mae": 2.742551379542927,
+          "wape": 0.43068670009647764
+        },
+        {
+          "weight": 0.7000000000000001,
+          "mae": 2.836616075912012,
+          "wape": 0.44545849761938494
+        },
+        {
+          "weight": 0.8,
+          "mae": 2.9404784615275363,
+          "wape": 0.46176891151301747
+        },
+        {
+          "weight": 0.9,
+          "mae": 3.0552161992347453,
+          "wape": 0.47978717654836156
+        },
+        {
+          "weight": 1.0,
+          "mae": 3.1795402900483074,
+          "wape": 0.49931087000197766
         }
       ],
       "conformal_adjustment": 0.14309388079509766,
@@ -247,6 +393,64 @@
           "store_bias_factor": 1.097962959502624
         }
       ],
+      "kalman_fusion_weight": 0.1,
+      "kalman_fusion_candidates": [
+        {
+          "weight": 0.0,
+          "mae": 2.543461541247942,
+          "wape": 0.37647712681026807
+        },
+        {
+          "weight": 0.1,
+          "mae": 2.5313221907494303,
+          "wape": 0.3746802890272285
+        },
+        {
+          "weight": 0.2,
+          "mae": 2.535311066641041,
+          "wape": 0.3752707129477488
+        },
+        {
+          "weight": 0.30000000000000004,
+          "mae": 2.5505325269785355,
+          "wape": 0.3775237572972634
+        },
+        {
+          "weight": 0.4,
+          "mae": 2.5783191403817836,
+          "wape": 0.38163666571289834
+        },
+        {
+          "weight": 0.5,
+          "mae": 2.61799787358125,
+          "wape": 0.3875098174111454
+        },
+        {
+          "weight": 0.6000000000000001,
+          "mae": 2.666264998939749,
+          "wape": 0.394654202486236
+        },
+        {
+          "weight": 0.7000000000000001,
+          "mae": 2.7241206950879318,
+          "wape": 0.40321786499979956
+        },
+        {
+          "weight": 0.8,
+          "mae": 2.7909437782425015,
+          "wape": 0.41310885880593856
+        },
+        {
+          "weight": 0.9,
+          "mae": 2.866623384663058,
+          "wape": 0.42431077411752754
+        },
+        {
+          "weight": 1.0,
+          "mae": 2.9524089949525725,
+          "wape": 0.43700855608108563
+        }
+      ],
       "conformal_adjustment": 0.22122664807781156,
       "best_iteration": 245,
       "quantile_best_iterations": {
@@ -290,6 +494,64 @@
           "store_bias_factor": 1.1091107753643434
         }
       ],
+      "kalman_fusion_weight": 0.0,
+      "kalman_fusion_candidates": [
+        {
+          "weight": 0.0,
+          "mae": 2.644162638275376,
+          "wape": 0.3646222795947329
+        },
+        {
+          "weight": 0.1,
+          "mae": 2.671332997134392,
+          "wape": 0.36836899246374283
+        },
+        {
+          "weight": 0.2,
+          "mae": 2.7094684468549386,
+          "wape": 0.37362775923141234
+        },
+        {
+          "weight": 0.30000000000000004,
+          "mae": 2.7580510005813657,
+          "wape": 0.38032715102821096
+        },
+        {
+          "weight": 0.4,
+          "mae": 2.8219444491791243,
+          "wape": 0.3891378703620561
+        },
+        {
+          "weight": 0.5,
+          "mae": 2.901211652187445,
+          "wape": 0.40006858537920936
+        },
+        {
+          "weight": 0.6000000000000001,
+          "mae": 2.9889267741513312,
+          "wape": 0.4121642436652907
+        },
+        {
+          "weight": 0.7000000000000001,
+          "mae": 3.08232579267927,
+          "wape": 0.42504369463196046
+        },
+        {
+          "weight": 0.8,
+          "mae": 3.1825652864331486,
+          "wape": 0.4388664270875556
+        },
+        {
+          "weight": 0.9,
+          "mae": 3.2923568810539976,
+          "wape": 0.4540063662620632
+        },
+        {
+          "weight": 1.0,
+          "mae": 3.4089027497546667,
+          "wape": 0.4700777000400427
+        }
+      ],
       "conformal_adjustment": 0.024526198261733967,
       "best_iteration": 512,
       "quantile_best_iterations": {
@@ -331,6 +593,64 @@
           "calibration_sample_count": 560,
           "store_bias_ratio_raw": 1.0651914872462585,
           "store_bias_factor": 1.0325957436231292
+        }
+      ],
+      "kalman_fusion_weight": 0.0,
+      "kalman_fusion_candidates": [
+        {
+          "weight": 0.0,
+          "mae": 2.7154159348381106,
+          "wape": 0.3772034703595193
+        },
+        {
+          "weight": 0.1,
+          "mae": 2.715686245382117,
+          "wape": 0.37724101969918605
+        },
+        {
+          "weight": 0.2,
+          "mae": 2.725700282372078,
+          "wape": 0.37863208817472227
+        },
+        {
+          "weight": 0.30000000000000004,
+          "mae": 2.7476889454917877,
+          "wape": 0.38168657420425034
+        },
+        {
+          "weight": 0.4,
+          "mae": 2.7813899436181284,
+          "wape": 0.3863680424407521
+        },
+        {
+          "weight": 0.5,
+          "mae": 2.8304700596357915,
+          "wape": 0.3931858525043931
+        },
+        {
+          "weight": 0.6000000000000001,
+          "mae": 2.89222523519648,
+          "wape": 0.40176437862825254
+        },
+        {
+          "weight": 0.7000000000000001,
+          "mae": 2.966617548209868,
+          "wape": 0.4120983529843375
+        },
+        {
+          "weight": 0.8,
+          "mae": 3.0536748371936646,
+          "wape": 0.42419164267284243
+        },
+        {
+          "weight": 0.9,
+          "mae": 3.1509104430475374,
+          "wape": 0.43769882126011767
+        },
+        {
+          "weight": 1.0,
+          "mae": 3.2564019945004428,
+          "wape": 0.4523528485828298
         }
       ],
       "conformal_adjustment": 0.012295414170228744,
@@ -426,6 +746,8 @@
     "P10/P90 use split conformal calibration for marginal 80% coverage; P50 remains the raw median quantile.",
     "Conformal coverage is marginal over the calibration population and is not guaranteed for each store, SKU, or horizon day.",
     "Store bias factors use only the seven days before each forecast origin, are shrunk toward one, and may not persist under abrupt demand shifts.",
+    "Kalman parameters are fixed; only the LightGBM/Kalman blend weight is selected on each pre-origin calibration window.",
+    "Kalman forecasts are observational state estimates, not causal demand estimates.",
     "This retrospective backtest covers five fixed seven-day origins only.",
     "TreeSHAP explains model output and feature association, not causal business impact.",
     "What-if results are controlled model responses, not causal estimates or operational guarantees."

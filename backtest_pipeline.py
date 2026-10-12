@@ -27,7 +27,7 @@ from predict_pipeline import (
 
 REPORT_DIR = DATA_DIR / "reports" / "model_quality"
 BACKTEST_WINDOW_COUNT = 5
-PIPELINE_VERSION = "rolling-backtest-v6-scenario-response"
+PIPELINE_VERSION = "rolling-backtest-v7-kalman-candidate"
 ENTITY_KEYS = ["store_id", "product_id"]
 HISTORY_FEATURE_COLS = (
     [f"qty_lag_{lag}" for lag in HISTORY_LAGS]
@@ -40,10 +40,21 @@ HISTORY_FEATURE_COLS = (
 )
 PREDICTION_COLUMNS = {
     "lightgbm": "pred_lightgbm",
+    "kalman": "pred_kalman",
+    "lightgbm_kalman": "pred_lightgbm_kalman",
     "baseline_yesterday": "pred_baseline_yesterday",
     "baseline_last_week": "pred_baseline_last_week",
     "baseline_rolling_28d": "pred_baseline_rolling_28d",
 }
+KALMAN_CONFIG = {
+    "history_days": 56,
+    "seasonal_shrinkage": 0.50,
+    "level_process_ratio": 0.15,
+    "trend_process_ratio": 0.01,
+    "trend_damping": 0.90,
+    "minimum_variance": 1.0,
+}
+KALMAN_FUSION_WEIGHTS = tuple(np.linspace(0.0, 1.0, 11))
 QUANTILE_LEVELS = {
     "pred_p10": 0.10,
     "pred_p50": 0.50,
@@ -88,6 +99,10 @@ def build_model_run_id(
         "parameters": LIGHTGBM_PARAMS,
         "quantile_levels": QUANTILE_LEVELS,
         "interval_target_coverage": INTERVAL_TARGET_COVERAGE,
+        "kalman": {
+            **KALMAN_CONFIG,
+            "fusion_weights": KALMAN_FUSION_WEIGHTS,
+        },
         "store_bias_calibration": {
             "shrinkage": STORE_BIAS_SHRINKAGE,
             "minimum_factor": STORE_BIAS_FACTOR_MIN,
@@ -643,6 +658,176 @@ def add_origin_safe_baselines(forecast_df, df, origin):
     return result
 
 
+def _kalman_local_trend(values, dates, forecast_dates, config=None):
+    """Forecast one series with a damped local-trend Kalman filter."""
+    parameters = {**KALMAN_CONFIG, **(config or {})}
+    values = np.asarray(values, dtype=float)
+    dates = pd.DatetimeIndex(dates)
+    forecast_dates = pd.DatetimeIndex(forecast_dates)
+    finite = np.isfinite(values)
+    values = values[finite]
+    dates = dates[finite]
+    if len(values) == 0:
+        return np.zeros(len(forecast_dates), dtype=float)
+
+    overall_mean = float(values.mean())
+    seasonal_offsets = {}
+    for weekday in range(7):
+        weekday_values = values[dates.dayofweek == weekday]
+        raw_offset = (
+            float(weekday_values.mean() - overall_mean)
+            if len(weekday_values)
+            else 0.0
+        )
+        seasonal_offsets[weekday] = (
+            parameters["seasonal_shrinkage"] * raw_offset
+        )
+    adjusted = values - np.array(
+        [seasonal_offsets[weekday] for weekday in dates.dayofweek],
+        dtype=float,
+    )
+
+    if len(adjusted) > 7:
+        noise_sample = adjusted[7:] - adjusted[:-7]
+    else:
+        noise_sample = np.diff(adjusted)
+    observation_variance = max(
+        float(np.nanvar(noise_sample) / 2) if len(noise_sample) else 0.0,
+        parameters["minimum_variance"],
+    )
+    recent_differences = np.diff(adjusted[-14:])
+    initial_trend = (
+        float(np.nanmedian(recent_differences))
+        if len(recent_differences)
+        else 0.0
+    )
+    state = np.array([adjusted[0], initial_trend], dtype=float)
+    covariance = np.diag(
+        [observation_variance * 10, observation_variance]
+    )
+    transition = np.array(
+        [[1.0, parameters["trend_damping"]], [0.0, parameters["trend_damping"]]],
+        dtype=float,
+    )
+    observation = np.array([[1.0, 0.0]], dtype=float)
+    process_noise = np.diag(
+        [
+            observation_variance * parameters["level_process_ratio"],
+            observation_variance * parameters["trend_process_ratio"],
+        ]
+    )
+    identity = np.eye(2)
+
+    for measurement in adjusted:
+        predicted_state = transition @ state
+        predicted_covariance = (
+            transition @ covariance @ transition.T + process_noise
+        )
+        innovation = measurement - (observation @ predicted_state).item()
+        innovation_variance = (
+            observation @ predicted_covariance @ observation.T
+            + observation_variance
+        ).item()
+        gain = predicted_covariance @ observation.T / innovation_variance
+        state = predicted_state + gain[:, 0] * innovation
+        covariance = (identity - gain @ observation) @ predicted_covariance
+
+    predictions = []
+    for forecast_date in forecast_dates:
+        state = transition @ state
+        covariance = transition @ covariance @ transition.T + process_noise
+        prediction = state[0] + seasonal_offsets[forecast_date.dayofweek]
+        predictions.append(max(0.0, float(prediction)))
+    return np.asarray(predictions)
+
+
+def kalman_forecast(df, origin, horizon, config=None):
+    """Create store-SKU Kalman forecasts using only observations before origin."""
+    parameters = {**KALMAN_CONFIG, **(config or {})}
+    history_start = origin - pd.Timedelta(days=parameters["history_days"])
+    history = df[
+        (df["date"] < origin) & (df["date"] >= history_start)
+    ][["date", *ENTITY_KEYS, "qty"]].copy()
+    forecast_dates = pd.date_range(origin, periods=horizon, freq="D")
+    rows = []
+    for entity_values, entity_history in history.groupby(
+        ENTITY_KEYS, sort=True
+    ):
+        entity_history = entity_history.sort_values("date")
+        predictions = _kalman_local_trend(
+            entity_history["qty"].to_numpy(dtype=float),
+            entity_history["date"],
+            forecast_dates,
+            config=parameters,
+        )
+        store_id, product_id = entity_values
+        rows.append(
+            pd.DataFrame(
+                {
+                    "date": forecast_dates,
+                    "store_id": store_id,
+                    "product_id": product_id,
+                    "pred_kalman": predictions,
+                }
+            )
+        )
+    if not rows:
+        raise ValueError(f"Insufficient Kalman history for origin {origin.date()}")
+    return pd.concat(rows, ignore_index=True)
+
+
+def apply_kalman_fusion(forecast, kalman, weight):
+    """Merge Kalman predictions and blend them with calibrated LightGBM."""
+    if not 0 <= weight <= 1:
+        raise ValueError("Kalman fusion weight must be between 0 and 1")
+    result = forecast.merge(
+        kalman,
+        on=["date", *ENTITY_KEYS],
+        how="left",
+        validate="one_to_one",
+    )
+    if result["pred_kalman"].isna().any():
+        raise ValueError("Kalman predictions must cover every forecast row")
+    result["kalman_fusion_weight"] = float(weight)
+    result["pred_lightgbm_kalman"] = (
+        (1 - weight) * result["pred_lightgbm"]
+        + weight * result["pred_kalman"]
+    ).clip(lower=0)
+    return result
+
+
+def select_kalman_fusion_weight(
+    calibration_forecast,
+    weights=KALMAN_FUSION_WEIGHTS,
+):
+    """Select a global blend weight from the pre-origin calibration window."""
+    required = {"qty", "pred_lightgbm", "pred_kalman"}
+    missing = required.difference(calibration_forecast.columns)
+    if missing:
+        raise ValueError(f"Missing fusion calibration columns: {sorted(missing)}")
+    actual = calibration_forecast["qty"].to_numpy(dtype=float)
+    lightgbm = calibration_forecast["pred_lightgbm"].to_numpy(dtype=float)
+    kalman = calibration_forecast["pred_kalman"].to_numpy(dtype=float)
+    denominator = np.abs(actual).sum()
+    candidates = []
+    for weight in weights:
+        prediction = (1 - weight) * lightgbm + weight * kalman
+        absolute_error = np.abs(actual - prediction)
+        candidates.append(
+            {
+                "weight": float(weight),
+                "mae": float(absolute_error.mean()),
+                "wape": (
+                    float(absolute_error.sum() / denominator)
+                    if denominator
+                    else np.nan
+                ),
+            }
+        )
+    selection = min(candidates, key=lambda row: (row["mae"], row["weight"]))
+    return selection["weight"], candidates
+
+
 def calculate_metrics(actual, predicted, lower=None, upper=None):
     actual = np.asarray(actual, dtype=float)
     predicted = np.asarray(predicted, dtype=float)
@@ -663,12 +848,56 @@ def calculate_metrics(actual, predicted, lower=None, upper=None):
         "mae": float(mean_absolute_error(actual, predicted)),
         "rmse": float(np.sqrt(mean_squared_error(actual, predicted))),
         "wape": float(np.abs(error).sum() / denominator) if denominator else np.nan,
+        "mean_error": float(error.mean()),
         "r2": float(r2_score(actual, predicted)) if len(actual) > 1 else np.nan,
         "within_10pct": float((np.abs(error / (actual + 1)) < 0.10).mean()),
         "within_20pct": float((np.abs(error / (actual + 1)) < 0.20).mean()),
         "interval_coverage": interval_coverage,
         "interval_mean_width": interval_mean_width,
         "interval_median_width": interval_median_width,
+    }
+
+
+def calculate_change_metrics(frame, prediction_column):
+    """Measure day-to-day amplitude and direction within each forecast series."""
+    ordered = frame.sort_values(
+        ["forecast_origin", *ENTITY_KEYS, "date"]
+    ).copy()
+    groups = ordered.groupby(
+        ["forecast_origin", *ENTITY_KEYS], sort=False
+    )
+    actual_change = groups["qty"].diff()
+    predicted_change = groups[prediction_column].diff()
+    valid = actual_change.notna() & predicted_change.notna()
+    actual_change = actual_change[valid].to_numpy(dtype=float)
+    predicted_change = predicted_change[valid].to_numpy(dtype=float)
+    if len(actual_change) == 0:
+        return {
+            "change_sample_count": 0,
+            "change_volatility_ratio": np.nan,
+            "change_direction_accuracy": np.nan,
+        }
+    actual_volatility = float(np.std(actual_change))
+    predicted_volatility = float(np.std(predicted_change))
+    nonzero = actual_change != 0
+    direction_accuracy = (
+        float(
+            (
+                np.sign(actual_change[nonzero])
+                == np.sign(predicted_change[nonzero])
+            ).mean()
+        )
+        if nonzero.any()
+        else np.nan
+    )
+    return {
+        "change_sample_count": int(len(actual_change)),
+        "change_volatility_ratio": (
+            predicted_volatility / actual_volatility
+            if actual_volatility
+            else np.nan
+        ),
+        "change_direction_accuracy": direction_accuracy,
     }
 
 
@@ -685,6 +914,10 @@ def build_quality_report(predictions):
                 lower=frame["pred_p10"] if interval_available else None,
                 upper=frame["pred_p90"] if interval_available else None,
             )
+            change_metrics = calculate_change_metrics(
+                frame,
+                prediction_column,
+            )
             rows.append(
                 {
                     "level": level,
@@ -696,6 +929,7 @@ def build_quality_report(predictions):
                     "validation_start": frame["date"].min().date().isoformat(),
                     "validation_end": frame["date"].max().date().isoformat(),
                     **metrics,
+                    **change_metrics,
                     "interval_status": (
                         "conformalized_p10_p90"
                         if interval_available
@@ -721,12 +955,11 @@ def build_quality_report(predictions):
 
     report = pd.DataFrame(rows)
     overall = report[report["level"] == "overall"].set_index("method")
-    best_baseline_mae = overall.loc[
-        overall.index != "lightgbm", "mae"
-    ].min()
-    best_baseline_wape = overall.loc[
-        overall.index != "lightgbm", "wape"
-    ].min()
+    baseline_methods = [
+        method for method in overall.index if method.startswith("baseline_")
+    ]
+    best_baseline_mae = overall.loc[baseline_methods, "mae"].min()
+    best_baseline_wape = overall.loc[baseline_methods, "wape"].min()
     model_is_candidate = bool(
         overall.loc["lightgbm", "mae"] < best_baseline_mae
         and overall.loc["lightgbm", "wape"] < best_baseline_wape
@@ -736,7 +969,32 @@ def build_quality_report(predictions):
         (report["level"] == "overall") & (report["method"] == "lightgbm"),
         "candidate_eligible",
     ] = model_is_candidate
-    return report, model_is_candidate
+    lightgbm_metrics = overall.loc["lightgbm"]
+    fusion_metrics = overall.loc["lightgbm_kalman"]
+    window_metrics = report[report["level"] == "window"].pivot(
+        index="entity_id",
+        columns="method",
+        values="mae",
+    )
+    fusion_window_wins = int(
+        (
+            window_metrics["lightgbm_kalman"]
+            < window_metrics["lightgbm"]
+        ).sum()
+    )
+    fusion_is_candidate = bool(
+        fusion_metrics["mae"] < lightgbm_metrics["mae"]
+        and fusion_metrics["wape"] < lightgbm_metrics["wape"]
+        and abs(fusion_metrics["mean_error"])
+        <= abs(lightgbm_metrics["mean_error"])
+        and fusion_window_wins >= 3
+    )
+    report.loc[
+        (report["level"] == "overall")
+        & (report["method"] == "lightgbm_kalman"),
+        "candidate_eligible",
+    ] = fusion_is_candidate
+    return report, model_is_candidate, fusion_is_candidate, fusion_window_wins
 
 
 def _sha256(path):
@@ -809,6 +1067,31 @@ def run_rolling_backtest(
             quantile_models=quantile_models,
             store_bias_factors=store_bias_factors,
         )
+        calibration_kalman = kalman_forecast(
+            df,
+            calibration_start,
+            horizon,
+        )
+        calibration_forecast = apply_kalman_fusion(
+            calibration_forecast,
+            calibration_kalman,
+            weight=0,
+        )
+        (
+            kalman_fusion_weight,
+            kalman_fusion_candidates,
+        ) = select_kalman_fusion_weight(calibration_forecast)
+        calibration_forecast = apply_kalman_fusion(
+            calibration_forecast.drop(
+                columns=[
+                    "pred_kalman",
+                    "kalman_fusion_weight",
+                    "pred_lightgbm_kalman",
+                ]
+            ),
+            calibration_kalman,
+            weight=kalman_fusion_weight,
+        )
         conformal_adjustment = calculate_conformal_adjustment(calibration_forecast)
         forecast, shap_contributions, scenarios = recursive_forecast(
             model,
@@ -821,6 +1104,11 @@ def run_rolling_backtest(
             model_run_id=run_id,
             include_explanations=True,
             include_scenarios=True,
+        )
+        forecast = apply_kalman_fusion(
+            forecast,
+            kalman_forecast(df, origin, horizon),
+            weight=kalman_fusion_weight,
         )
         forecast = apply_conformal_adjustment(forecast, conformal_adjustment)
         forecast = add_origin_safe_baselines(forecast, df, origin)
@@ -844,6 +1132,8 @@ def run_rolling_backtest(
                 "store_bias_factors": store_bias_factors.to_dict(
                     orient="records"
                 ),
+                "kalman_fusion_weight": kalman_fusion_weight,
+                "kalman_fusion_candidates": kalman_fusion_candidates,
                 "conformal_adjustment": conformal_adjustment,
                 "best_iteration": int(model.best_iteration_),
                 "quantile_best_iterations": {
@@ -856,7 +1146,12 @@ def run_rolling_backtest(
     predictions = pd.concat(all_predictions, ignore_index=True)
     shap_contributions = pd.concat(all_shap_contributions, ignore_index=True)
     scenarios = pd.concat(all_scenarios, ignore_index=True)
-    quality, model_is_candidate = build_quality_report(predictions)
+    (
+        quality,
+        model_is_candidate,
+        fusion_is_candidate,
+        fusion_window_wins,
+    ) = build_quality_report(predictions)
     generated_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
     output_dir = Path(output_dir)
@@ -883,6 +1178,7 @@ def run_rolling_backtest(
         "pred_lightgbm_raw",
         "pred_lightgbm_model",
         *PREDICTION_COLUMNS.values(),
+        "kalman_fusion_weight",
         "postprocess_adjustment",
         "store_bias_factor",
         "store_bias_adjustment",
@@ -916,6 +1212,32 @@ def run_rolling_backtest(
         "candidate_rule": (
             "Aggregate LightGBM MAE and WAPE must both beat the best origin-safe baseline"
         ),
+        "selected_point_forecast": (
+            "pred_lightgbm_kalman"
+            if fusion_is_candidate
+            else "pred_lightgbm"
+        ),
+        "kalman_candidate_status": (
+            "promoted" if fusion_is_candidate else "experimental"
+        ),
+        "kalman_promotion_rule": (
+            "Fusion must improve aggregate MAE and WAPE, not increase absolute "
+            "mean error, and beat LightGBM MAE in at least three of five windows"
+        ),
+        "kalman_fusion_window_wins": fusion_window_wins,
+        "kalman": {
+            "method": (
+                "Per-store-SKU damped local-linear-trend Kalman filter with "
+                "shrunk weekday seasonal offsets"
+            ),
+            "parameters": KALMAN_CONFIG,
+            "candidate_weights": KALMAN_FUSION_WEIGHTS,
+            "weight_selection": (
+                "Minimum MAE on the seven-day pre-origin calibration window; "
+                "ties prefer the lower Kalman weight"
+            ),
+            "future_label_access": False,
+        },
         "data_range": {
             "start": df["date"].min().date().isoformat(),
             "end": df["date"].max().date().isoformat(),
@@ -1006,6 +1328,8 @@ def run_rolling_backtest(
             "P10/P90 use split conformal calibration for marginal 80% coverage; P50 remains the raw median quantile.",
             "Conformal coverage is marginal over the calibration population and is not guaranteed for each store, SKU, or horizon day.",
             "Store bias factors use only the seven days before each forecast origin, are shrunk toward one, and may not persist under abrupt demand shifts.",
+            "Kalman parameters are fixed; only the LightGBM/Kalman blend weight is selected on each pre-origin calibration window.",
+            "Kalman forecasts are observational state estimates, not causal demand estimates.",
             "This retrospective backtest covers five fixed seven-day origins only.",
             "TreeSHAP explains model output and feature association, not causal business impact.",
             "What-if results are controlled model responses, not causal estimates or operational guarantees.",
@@ -1022,9 +1346,12 @@ def run_rolling_backtest(
             "mae",
             "rmse",
             "wape",
+            "mean_error",
             "r2",
             "within_10pct",
             "within_20pct",
+            "change_volatility_ratio",
+            "change_direction_accuracy",
             "interval_coverage",
             "interval_mean_width",
         ]

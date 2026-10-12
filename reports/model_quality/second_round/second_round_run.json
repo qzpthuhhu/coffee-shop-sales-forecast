@@ -1,0 +1,1179 @@
+{
+  "experiment_version": "direct-feature-mining-v2",
+  "generated_at": "2026-10-12T08:26:17+00:00",
+  "production_model_changed": false,
+  "baseline_method": "baseline_direct_tweedie_1_3",
+  "origins": [
+    "2023-05-27",
+    "2023-06-03",
+    "2023-06-10",
+    "2023-06-17",
+    "2023-06-24"
+  ],
+  "forecast_horizon_days": 7,
+  "base_feature_count": 49,
+  "feature_bundles": {
+    "plus_a": [
+      "qty_ewm_3d",
+      "qty_ewm_7d",
+      "qty_ewm_14d",
+      "qty_ewm_28d",
+      "qty_slope_7d",
+      "qty_momentum_7_28d",
+      "qty_rate_7_28d",
+      "qty_same_dow_lag_7",
+      "qty_same_dow_lag_14",
+      "qty_same_dow_lag_21",
+      "qty_same_dow_lag_28",
+      "qty_same_dow_median_4",
+      "qty_same_dow_max_4"
+    ],
+    "plus_b": [
+      "zero_streak",
+      "days_since_sale",
+      "nonzero_rate_7d",
+      "nonzero_rate_28d",
+      "adi_28d",
+      "cv2_28d"
+    ],
+    "plus_c": [
+      "store_qty_lag_1",
+      "store_qty_mean_7d",
+      "store_qty_mean_28d",
+      "store_qty_momentum_7_28d",
+      "store_category_qty_lag_1",
+      "store_category_qty_mean_7d",
+      "store_category_qty_mean_28d",
+      "store_category_qty_momentum_7_28d",
+      "product_all_store_qty_lag_1",
+      "product_all_store_qty_mean_7d",
+      "product_all_store_qty_mean_28d",
+      "product_all_store_qty_momentum_7_28d",
+      "sku_share_7d",
+      "sku_share_trend_7_28d"
+    ],
+    "plus_a_b": [
+      "qty_ewm_3d",
+      "qty_ewm_7d",
+      "qty_ewm_14d",
+      "qty_ewm_28d",
+      "qty_slope_7d",
+      "qty_momentum_7_28d",
+      "qty_rate_7_28d",
+      "qty_same_dow_lag_7",
+      "qty_same_dow_lag_14",
+      "qty_same_dow_lag_21",
+      "qty_same_dow_lag_28",
+      "qty_same_dow_median_4",
+      "qty_same_dow_max_4",
+      "zero_streak",
+      "days_since_sale",
+      "nonzero_rate_7d",
+      "nonzero_rate_28d",
+      "adi_28d",
+      "cv2_28d"
+    ],
+    "plus_a_b_c": [
+      "qty_ewm_3d",
+      "qty_ewm_7d",
+      "qty_ewm_14d",
+      "qty_ewm_28d",
+      "qty_slope_7d",
+      "qty_momentum_7_28d",
+      "qty_rate_7_28d",
+      "qty_same_dow_lag_7",
+      "qty_same_dow_lag_14",
+      "qty_same_dow_lag_21",
+      "qty_same_dow_lag_28",
+      "qty_same_dow_median_4",
+      "qty_same_dow_max_4",
+      "zero_streak",
+      "days_since_sale",
+      "nonzero_rate_7d",
+      "nonzero_rate_28d",
+      "adi_28d",
+      "cv2_28d",
+      "store_qty_lag_1",
+      "store_qty_mean_7d",
+      "store_qty_mean_28d",
+      "store_qty_momentum_7_28d",
+      "store_category_qty_lag_1",
+      "store_category_qty_mean_7d",
+      "store_category_qty_mean_28d",
+      "store_category_qty_momentum_7_28d",
+      "product_all_store_qty_lag_1",
+      "product_all_store_qty_mean_7d",
+      "product_all_store_qty_mean_28d",
+      "product_all_store_qty_momentum_7_28d",
+      "sku_share_7d",
+      "sku_share_trend_7_28d"
+    ]
+  },
+  "tweedie_parameters": {
+    "objective": "tweedie",
+    "tweedie_variance_power": 1.3
+  },
+  "peak_threshold": 16.0,
+  "low_threshold": 1.0,
+  "promotion_rule": "Candidate must improve aggregate MAE, WAPE, and peak-segment MAE and beat the first-round baseline in at least three windows.",
+  "eligible_methods": [],
+  "recommended_candidate": null,
+  "training_runs": [
+    {
+      "forecast_origin": "2023-05-27",
+      "method": "plus_a",
+      "feature_count": 62,
+      "incremental_features": [
+        "qty_ewm_3d",
+        "qty_ewm_7d",
+        "qty_ewm_14d",
+        "qty_ewm_28d",
+        "qty_slope_7d",
+        "qty_momentum_7_28d",
+        "qty_rate_7_28d",
+        "qty_same_dow_lag_7",
+        "qty_same_dow_lag_14",
+        "qty_same_dow_lag_21",
+        "qty_same_dow_lag_28",
+        "qty_same_dow_median_4",
+        "qty_same_dow_max_4"
+      ],
+      "fit_end": "2023-05-12",
+      "validation_start": "2023-05-13",
+      "validation_end": "2023-05-19",
+      "best_iteration": 238,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.0419431248985553
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0777054596055555
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.0059853361157982
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-05-27",
+      "method": "plus_b",
+      "feature_count": 55,
+      "incremental_features": [
+        "zero_streak",
+        "days_since_sale",
+        "nonzero_rate_7d",
+        "nonzero_rate_28d",
+        "adi_28d",
+        "cv2_28d"
+      ],
+      "fit_end": "2023-05-12",
+      "validation_start": "2023-05-13",
+      "validation_end": "2023-05-19",
+      "best_iteration": 192,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.0531253932462779
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0906632478587528
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.0088578601122555
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-05-27",
+      "method": "plus_c",
+      "feature_count": 63,
+      "incremental_features": [
+        "store_qty_lag_1",
+        "store_qty_mean_7d",
+        "store_qty_mean_28d",
+        "store_qty_momentum_7_28d",
+        "store_category_qty_lag_1",
+        "store_category_qty_mean_7d",
+        "store_category_qty_mean_28d",
+        "store_category_qty_momentum_7_28d",
+        "product_all_store_qty_lag_1",
+        "product_all_store_qty_mean_7d",
+        "product_all_store_qty_mean_28d",
+        "product_all_store_qty_momentum_7_28d",
+        "sku_share_7d",
+        "sku_share_trend_7_28d"
+      ],
+      "fit_end": "2023-05-12",
+      "validation_start": "2023-05-13",
+      "validation_end": "2023-05-19",
+      "best_iteration": 231,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.0691621441177195
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0970031495158392
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.0256673590104013
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-05-27",
+      "method": "plus_a_b",
+      "feature_count": 68,
+      "incremental_features": [
+        "qty_ewm_3d",
+        "qty_ewm_7d",
+        "qty_ewm_14d",
+        "qty_ewm_28d",
+        "qty_slope_7d",
+        "qty_momentum_7_28d",
+        "qty_rate_7_28d",
+        "qty_same_dow_lag_7",
+        "qty_same_dow_lag_14",
+        "qty_same_dow_lag_21",
+        "qty_same_dow_lag_28",
+        "qty_same_dow_median_4",
+        "qty_same_dow_max_4",
+        "zero_streak",
+        "days_since_sale",
+        "nonzero_rate_7d",
+        "nonzero_rate_28d",
+        "adi_28d",
+        "cv2_28d"
+      ],
+      "fit_end": "2023-05-12",
+      "validation_start": "2023-05-13",
+      "validation_end": "2023-05-19",
+      "best_iteration": 255,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.04800551498102
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0881578052558858
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.016489674467366
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-05-27",
+      "method": "plus_a_b_c",
+      "feature_count": 82,
+      "incremental_features": [
+        "qty_ewm_3d",
+        "qty_ewm_7d",
+        "qty_ewm_14d",
+        "qty_ewm_28d",
+        "qty_slope_7d",
+        "qty_momentum_7_28d",
+        "qty_rate_7_28d",
+        "qty_same_dow_lag_7",
+        "qty_same_dow_lag_14",
+        "qty_same_dow_lag_21",
+        "qty_same_dow_lag_28",
+        "qty_same_dow_median_4",
+        "qty_same_dow_max_4",
+        "zero_streak",
+        "days_since_sale",
+        "nonzero_rate_7d",
+        "nonzero_rate_28d",
+        "adi_28d",
+        "cv2_28d",
+        "store_qty_lag_1",
+        "store_qty_mean_7d",
+        "store_qty_mean_28d",
+        "store_qty_momentum_7_28d",
+        "store_category_qty_lag_1",
+        "store_category_qty_mean_7d",
+        "store_category_qty_mean_28d",
+        "store_category_qty_momentum_7_28d",
+        "product_all_store_qty_lag_1",
+        "product_all_store_qty_mean_7d",
+        "product_all_store_qty_mean_28d",
+        "product_all_store_qty_momentum_7_28d",
+        "sku_share_7d",
+        "sku_share_trend_7_28d"
+      ],
+      "fit_end": "2023-05-12",
+      "validation_start": "2023-05-13",
+      "validation_end": "2023-05-19",
+      "best_iteration": 226,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.0424643812325396
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0781898175425138
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.006760206905433
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-03",
+      "method": "plus_a",
+      "feature_count": 62,
+      "incremental_features": [
+        "qty_ewm_3d",
+        "qty_ewm_7d",
+        "qty_ewm_14d",
+        "qty_ewm_28d",
+        "qty_slope_7d",
+        "qty_momentum_7_28d",
+        "qty_rate_7_28d",
+        "qty_same_dow_lag_7",
+        "qty_same_dow_lag_14",
+        "qty_same_dow_lag_21",
+        "qty_same_dow_lag_28",
+        "qty_same_dow_median_4",
+        "qty_same_dow_max_4"
+      ],
+      "fit_end": "2023-05-19",
+      "validation_start": "2023-05-20",
+      "validation_end": "2023-05-26",
+      "best_iteration": 272,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.0753064537271573
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0239731487754722
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 0.9937528722942923
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-03",
+      "method": "plus_b",
+      "feature_count": 55,
+      "incremental_features": [
+        "zero_streak",
+        "days_since_sale",
+        "nonzero_rate_7d",
+        "nonzero_rate_28d",
+        "adi_28d",
+        "cv2_28d"
+      ],
+      "fit_end": "2023-05-19",
+      "validation_start": "2023-05-20",
+      "validation_end": "2023-05-26",
+      "best_iteration": 538,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.0844323195501975
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0387220667570658
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.0126411860969873
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-03",
+      "method": "plus_c",
+      "feature_count": 63,
+      "incremental_features": [
+        "store_qty_lag_1",
+        "store_qty_mean_7d",
+        "store_qty_mean_28d",
+        "store_qty_momentum_7_28d",
+        "store_category_qty_lag_1",
+        "store_category_qty_mean_7d",
+        "store_category_qty_mean_28d",
+        "store_category_qty_momentum_7_28d",
+        "product_all_store_qty_lag_1",
+        "product_all_store_qty_mean_7d",
+        "product_all_store_qty_mean_28d",
+        "product_all_store_qty_momentum_7_28d",
+        "sku_share_7d",
+        "sku_share_trend_7_28d"
+      ],
+      "fit_end": "2023-05-19",
+      "validation_start": "2023-05-20",
+      "validation_end": "2023-05-26",
+      "best_iteration": 293,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.0785560476861336
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0355731367320562
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.006238722594124
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-03",
+      "method": "plus_a_b",
+      "feature_count": 68,
+      "incremental_features": [
+        "qty_ewm_3d",
+        "qty_ewm_7d",
+        "qty_ewm_14d",
+        "qty_ewm_28d",
+        "qty_slope_7d",
+        "qty_momentum_7_28d",
+        "qty_rate_7_28d",
+        "qty_same_dow_lag_7",
+        "qty_same_dow_lag_14",
+        "qty_same_dow_lag_21",
+        "qty_same_dow_lag_28",
+        "qty_same_dow_median_4",
+        "qty_same_dow_max_4",
+        "zero_streak",
+        "days_since_sale",
+        "nonzero_rate_7d",
+        "nonzero_rate_28d",
+        "adi_28d",
+        "cv2_28d"
+      ],
+      "fit_end": "2023-05-19",
+      "validation_start": "2023-05-20",
+      "validation_end": "2023-05-26",
+      "best_iteration": 282,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.0708845499534312
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0276176681518758
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 0.9973189942104022
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-03",
+      "method": "plus_a_b_c",
+      "feature_count": 82,
+      "incremental_features": [
+        "qty_ewm_3d",
+        "qty_ewm_7d",
+        "qty_ewm_14d",
+        "qty_ewm_28d",
+        "qty_slope_7d",
+        "qty_momentum_7_28d",
+        "qty_rate_7_28d",
+        "qty_same_dow_lag_7",
+        "qty_same_dow_lag_14",
+        "qty_same_dow_lag_21",
+        "qty_same_dow_lag_28",
+        "qty_same_dow_median_4",
+        "qty_same_dow_max_4",
+        "zero_streak",
+        "days_since_sale",
+        "nonzero_rate_7d",
+        "nonzero_rate_28d",
+        "adi_28d",
+        "cv2_28d",
+        "store_qty_lag_1",
+        "store_qty_mean_7d",
+        "store_qty_mean_28d",
+        "store_qty_momentum_7_28d",
+        "store_category_qty_lag_1",
+        "store_category_qty_mean_7d",
+        "store_category_qty_mean_28d",
+        "store_category_qty_momentum_7_28d",
+        "product_all_store_qty_lag_1",
+        "product_all_store_qty_mean_7d",
+        "product_all_store_qty_mean_28d",
+        "product_all_store_qty_momentum_7_28d",
+        "sku_share_7d",
+        "sku_share_trend_7_28d"
+      ],
+      "fit_end": "2023-05-19",
+      "validation_start": "2023-05-20",
+      "validation_end": "2023-05-26",
+      "best_iteration": 272,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.07287938602507
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0280615309331447
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.0031367521413495
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-10",
+      "method": "plus_a",
+      "feature_count": 62,
+      "incremental_features": [
+        "qty_ewm_3d",
+        "qty_ewm_7d",
+        "qty_ewm_14d",
+        "qty_ewm_28d",
+        "qty_slope_7d",
+        "qty_momentum_7_28d",
+        "qty_rate_7_28d",
+        "qty_same_dow_lag_7",
+        "qty_same_dow_lag_14",
+        "qty_same_dow_lag_21",
+        "qty_same_dow_lag_28",
+        "qty_same_dow_median_4",
+        "qty_same_dow_max_4"
+      ],
+      "fit_end": "2023-05-26",
+      "validation_start": "2023-05-27",
+      "validation_end": "2023-06-02",
+      "best_iteration": 206,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.0466817160204231
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0184747711139566
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.0639369773993952
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-10",
+      "method": "plus_b",
+      "feature_count": 55,
+      "incremental_features": [
+        "zero_streak",
+        "days_since_sale",
+        "nonzero_rate_7d",
+        "nonzero_rate_28d",
+        "adi_28d",
+        "cv2_28d"
+      ],
+      "fit_end": "2023-05-26",
+      "validation_start": "2023-05-27",
+      "validation_end": "2023-06-02",
+      "best_iteration": 206,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.036269659932743
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.000006723980472
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.0460543162321598
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-10",
+      "method": "plus_c",
+      "feature_count": 63,
+      "incremental_features": [
+        "store_qty_lag_1",
+        "store_qty_mean_7d",
+        "store_qty_mean_28d",
+        "store_qty_momentum_7_28d",
+        "store_category_qty_lag_1",
+        "store_category_qty_mean_7d",
+        "store_category_qty_mean_28d",
+        "store_category_qty_momentum_7_28d",
+        "product_all_store_qty_lag_1",
+        "product_all_store_qty_mean_7d",
+        "product_all_store_qty_mean_28d",
+        "product_all_store_qty_momentum_7_28d",
+        "sku_share_7d",
+        "sku_share_trend_7_28d"
+      ],
+      "fit_end": "2023-05-26",
+      "validation_start": "2023-05-27",
+      "validation_end": "2023-06-02",
+      "best_iteration": 300,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.0481936967970313
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0153080889582131
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.0614292463040162
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-10",
+      "method": "plus_a_b",
+      "feature_count": 68,
+      "incremental_features": [
+        "qty_ewm_3d",
+        "qty_ewm_7d",
+        "qty_ewm_14d",
+        "qty_ewm_28d",
+        "qty_slope_7d",
+        "qty_momentum_7_28d",
+        "qty_rate_7_28d",
+        "qty_same_dow_lag_7",
+        "qty_same_dow_lag_14",
+        "qty_same_dow_lag_21",
+        "qty_same_dow_lag_28",
+        "qty_same_dow_median_4",
+        "qty_same_dow_max_4",
+        "zero_streak",
+        "days_since_sale",
+        "nonzero_rate_7d",
+        "nonzero_rate_28d",
+        "adi_28d",
+        "cv2_28d"
+      ],
+      "fit_end": "2023-05-26",
+      "validation_start": "2023-05-27",
+      "validation_end": "2023-06-02",
+      "best_iteration": 293,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.0423179272171001
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0126598309504409
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.0518718792261528
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-10",
+      "method": "plus_a_b_c",
+      "feature_count": 82,
+      "incremental_features": [
+        "qty_ewm_3d",
+        "qty_ewm_7d",
+        "qty_ewm_14d",
+        "qty_ewm_28d",
+        "qty_slope_7d",
+        "qty_momentum_7_28d",
+        "qty_rate_7_28d",
+        "qty_same_dow_lag_7",
+        "qty_same_dow_lag_14",
+        "qty_same_dow_lag_21",
+        "qty_same_dow_lag_28",
+        "qty_same_dow_median_4",
+        "qty_same_dow_max_4",
+        "zero_streak",
+        "days_since_sale",
+        "nonzero_rate_7d",
+        "nonzero_rate_28d",
+        "adi_28d",
+        "cv2_28d",
+        "store_qty_lag_1",
+        "store_qty_mean_7d",
+        "store_qty_mean_28d",
+        "store_qty_momentum_7_28d",
+        "store_category_qty_lag_1",
+        "store_category_qty_mean_7d",
+        "store_category_qty_mean_28d",
+        "store_category_qty_momentum_7_28d",
+        "product_all_store_qty_lag_1",
+        "product_all_store_qty_mean_7d",
+        "product_all_store_qty_mean_28d",
+        "product_all_store_qty_momentum_7_28d",
+        "sku_share_7d",
+        "sku_share_trend_7_28d"
+      ],
+      "fit_end": "2023-05-26",
+      "validation_start": "2023-05-27",
+      "validation_end": "2023-06-02",
+      "best_iteration": 277,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.0452198751306534
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0099206400198084
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.0553525101819647
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-17",
+      "method": "plus_a",
+      "feature_count": 62,
+      "incremental_features": [
+        "qty_ewm_3d",
+        "qty_ewm_7d",
+        "qty_ewm_14d",
+        "qty_ewm_28d",
+        "qty_slope_7d",
+        "qty_momentum_7_28d",
+        "qty_rate_7_28d",
+        "qty_same_dow_lag_7",
+        "qty_same_dow_lag_14",
+        "qty_same_dow_lag_21",
+        "qty_same_dow_lag_28",
+        "qty_same_dow_median_4",
+        "qty_same_dow_max_4"
+      ],
+      "fit_end": "2023-06-02",
+      "validation_start": "2023-06-03",
+      "validation_end": "2023-06-09",
+      "best_iteration": 410,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 0.992583918266335
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.007774110365695
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.051865237656864
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-17",
+      "method": "plus_b",
+      "feature_count": 55,
+      "incremental_features": [
+        "zero_streak",
+        "days_since_sale",
+        "nonzero_rate_7d",
+        "nonzero_rate_28d",
+        "adi_28d",
+        "cv2_28d"
+      ],
+      "fit_end": "2023-06-02",
+      "validation_start": "2023-06-03",
+      "validation_end": "2023-06-09",
+      "best_iteration": 586,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.009338840150694
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0236340095596237
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.0552171758440254
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-17",
+      "method": "plus_c",
+      "feature_count": 63,
+      "incremental_features": [
+        "store_qty_lag_1",
+        "store_qty_mean_7d",
+        "store_qty_mean_28d",
+        "store_qty_momentum_7_28d",
+        "store_category_qty_lag_1",
+        "store_category_qty_mean_7d",
+        "store_category_qty_mean_28d",
+        "store_category_qty_momentum_7_28d",
+        "product_all_store_qty_lag_1",
+        "product_all_store_qty_mean_7d",
+        "product_all_store_qty_mean_28d",
+        "product_all_store_qty_momentum_7_28d",
+        "sku_share_7d",
+        "sku_share_trend_7_28d"
+      ],
+      "fit_end": "2023-06-02",
+      "validation_start": "2023-06-03",
+      "validation_end": "2023-06-09",
+      "best_iteration": 474,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.0109258306645774
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0112287799587611
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.0378500136940338
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-17",
+      "method": "plus_a_b",
+      "feature_count": 68,
+      "incremental_features": [
+        "qty_ewm_3d",
+        "qty_ewm_7d",
+        "qty_ewm_14d",
+        "qty_ewm_28d",
+        "qty_slope_7d",
+        "qty_momentum_7_28d",
+        "qty_rate_7_28d",
+        "qty_same_dow_lag_7",
+        "qty_same_dow_lag_14",
+        "qty_same_dow_lag_21",
+        "qty_same_dow_lag_28",
+        "qty_same_dow_median_4",
+        "qty_same_dow_max_4",
+        "zero_streak",
+        "days_since_sale",
+        "nonzero_rate_7d",
+        "nonzero_rate_28d",
+        "adi_28d",
+        "cv2_28d"
+      ],
+      "fit_end": "2023-06-02",
+      "validation_start": "2023-06-03",
+      "validation_end": "2023-06-09",
+      "best_iteration": 645,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 0.9963953353369035
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0104169723851972
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.0532091279370506
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-17",
+      "method": "plus_a_b_c",
+      "feature_count": 82,
+      "incremental_features": [
+        "qty_ewm_3d",
+        "qty_ewm_7d",
+        "qty_ewm_14d",
+        "qty_ewm_28d",
+        "qty_slope_7d",
+        "qty_momentum_7_28d",
+        "qty_rate_7_28d",
+        "qty_same_dow_lag_7",
+        "qty_same_dow_lag_14",
+        "qty_same_dow_lag_21",
+        "qty_same_dow_lag_28",
+        "qty_same_dow_median_4",
+        "qty_same_dow_max_4",
+        "zero_streak",
+        "days_since_sale",
+        "nonzero_rate_7d",
+        "nonzero_rate_28d",
+        "adi_28d",
+        "cv2_28d",
+        "store_qty_lag_1",
+        "store_qty_mean_7d",
+        "store_qty_mean_28d",
+        "store_qty_momentum_7_28d",
+        "store_category_qty_lag_1",
+        "store_category_qty_mean_7d",
+        "store_category_qty_mean_28d",
+        "store_category_qty_momentum_7_28d",
+        "product_all_store_qty_lag_1",
+        "product_all_store_qty_mean_7d",
+        "product_all_store_qty_mean_28d",
+        "product_all_store_qty_momentum_7_28d",
+        "sku_share_7d",
+        "sku_share_trend_7_28d"
+      ],
+      "fit_end": "2023-06-02",
+      "validation_start": "2023-06-03",
+      "validation_end": "2023-06-09",
+      "best_iteration": 426,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 0.9841633087218538
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 0.9942485816966686
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.0450240176873424
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-24",
+      "method": "plus_a",
+      "feature_count": 62,
+      "incremental_features": [
+        "qty_ewm_3d",
+        "qty_ewm_7d",
+        "qty_ewm_14d",
+        "qty_ewm_28d",
+        "qty_slope_7d",
+        "qty_momentum_7_28d",
+        "qty_rate_7_28d",
+        "qty_same_dow_lag_7",
+        "qty_same_dow_lag_14",
+        "qty_same_dow_lag_21",
+        "qty_same_dow_lag_28",
+        "qty_same_dow_median_4",
+        "qty_same_dow_max_4"
+      ],
+      "fit_end": "2023-06-09",
+      "validation_start": "2023-06-10",
+      "validation_end": "2023-06-16",
+      "best_iteration": 279,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.04956831096834
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0255085581566559
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.0172310487106704
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-24",
+      "method": "plus_b",
+      "feature_count": 55,
+      "incremental_features": [
+        "zero_streak",
+        "days_since_sale",
+        "nonzero_rate_7d",
+        "nonzero_rate_28d",
+        "adi_28d",
+        "cv2_28d"
+      ],
+      "fit_end": "2023-06-09",
+      "validation_start": "2023-06-10",
+      "validation_end": "2023-06-16",
+      "best_iteration": 277,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.0386789149427882
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0272921366510188
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.016763740756573
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-24",
+      "method": "plus_c",
+      "feature_count": 63,
+      "incremental_features": [
+        "store_qty_lag_1",
+        "store_qty_mean_7d",
+        "store_qty_mean_28d",
+        "store_qty_momentum_7_28d",
+        "store_category_qty_lag_1",
+        "store_category_qty_mean_7d",
+        "store_category_qty_mean_28d",
+        "store_category_qty_momentum_7_28d",
+        "product_all_store_qty_lag_1",
+        "product_all_store_qty_mean_7d",
+        "product_all_store_qty_mean_28d",
+        "product_all_store_qty_momentum_7_28d",
+        "sku_share_7d",
+        "sku_share_trend_7_28d"
+      ],
+      "fit_end": "2023-06-09",
+      "validation_start": "2023-06-10",
+      "validation_end": "2023-06-16",
+      "best_iteration": 347,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.0602876123173237
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0485632736144717
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.036552944421249
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-24",
+      "method": "plus_a_b",
+      "feature_count": 68,
+      "incremental_features": [
+        "qty_ewm_3d",
+        "qty_ewm_7d",
+        "qty_ewm_14d",
+        "qty_ewm_28d",
+        "qty_slope_7d",
+        "qty_momentum_7_28d",
+        "qty_rate_7_28d",
+        "qty_same_dow_lag_7",
+        "qty_same_dow_lag_14",
+        "qty_same_dow_lag_21",
+        "qty_same_dow_lag_28",
+        "qty_same_dow_median_4",
+        "qty_same_dow_max_4",
+        "zero_streak",
+        "days_since_sale",
+        "nonzero_rate_7d",
+        "nonzero_rate_28d",
+        "adi_28d",
+        "cv2_28d"
+      ],
+      "fit_end": "2023-06-09",
+      "validation_start": "2023-06-10",
+      "validation_end": "2023-06-16",
+      "best_iteration": 270,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.0460237244087316
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0261222347001864
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.01545236636913
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-24",
+      "method": "plus_a_b_c",
+      "feature_count": 82,
+      "incremental_features": [
+        "qty_ewm_3d",
+        "qty_ewm_7d",
+        "qty_ewm_14d",
+        "qty_ewm_28d",
+        "qty_slope_7d",
+        "qty_momentum_7_28d",
+        "qty_rate_7_28d",
+        "qty_same_dow_lag_7",
+        "qty_same_dow_lag_14",
+        "qty_same_dow_lag_21",
+        "qty_same_dow_lag_28",
+        "qty_same_dow_median_4",
+        "qty_same_dow_max_4",
+        "zero_streak",
+        "days_since_sale",
+        "nonzero_rate_7d",
+        "nonzero_rate_28d",
+        "adi_28d",
+        "cv2_28d",
+        "store_qty_lag_1",
+        "store_qty_mean_7d",
+        "store_qty_mean_28d",
+        "store_qty_momentum_7_28d",
+        "store_category_qty_lag_1",
+        "store_category_qty_mean_7d",
+        "store_category_qty_mean_28d",
+        "store_category_qty_momentum_7_28d",
+        "product_all_store_qty_lag_1",
+        "product_all_store_qty_mean_7d",
+        "product_all_store_qty_mean_28d",
+        "product_all_store_qty_momentum_7_28d",
+        "sku_share_7d",
+        "sku_share_trend_7_28d"
+      ],
+      "fit_end": "2023-06-09",
+      "validation_start": "2023-06-10",
+      "validation_end": "2023-06-16",
+      "best_iteration": 198,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.0600960592279542
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0360600501499764
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.0228467025840433
+        }
+      ]
+    }
+  ],
+  "artifacts": {
+    "predictions": "/Users/bytedance/Documents/门店预测kaggle数据/reports/model_quality/second_round/second_round_predictions.csv.gz",
+    "quality": "/Users/bytedance/Documents/门店预测kaggle数据/reports/model_quality/second_round/second_round_quality.csv",
+    "coverage": "/Users/bytedance/Documents/门店预测kaggle数据/reports/model_quality/second_round/second_round_coverage.csv",
+    "summary": "/Users/bytedance/Documents/门店预测kaggle数据/reports/model_quality/second_round/second_round_summary.csv"
+  }
+}

@@ -1,0 +1,311 @@
+{
+  "experiment_version": "sparse-features-v1",
+  "generated_at": "2026-10-12T08:55:19+00:00",
+  "production_model_changed": false,
+  "description": "Sparsity labels (is_sparse, zero_rate, adi, mean_qty) and their interactions with key history features injected into a single global direct_tweedie_1_3 — model learns to gate sparse vs dense without splitting training data.",
+  "origins": [
+    "2023-05-27",
+    "2023-06-03",
+    "2023-06-10",
+    "2023-06-17",
+    "2023-06-24"
+  ],
+  "sparse_sku_count": 77,
+  "total_sku_count": 240,
+  "interaction_base_cols": [
+    "qty_lag_1",
+    "qty_lag_7",
+    "qty_lag_28",
+    "qty_roll_mean_7d",
+    "qty_roll_mean_28d",
+    "qty_dow_avg",
+    "sku_share_28d"
+  ],
+  "eligible_methods": [
+    "plus_sparsity_labels",
+    "plus_sparsity_interactions"
+  ],
+  "recommended_candidate": "plus_sparsity_labels",
+  "training_runs": [
+    {
+      "forecast_origin": "2023-05-27",
+      "method": "plus_sparsity_labels",
+      "feature_count": 53,
+      "fit_end": "2023-05-12",
+      "validation_start": "2023-05-13",
+      "validation_end": "2023-05-19",
+      "best_iteration": 209,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.0719071230042658
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.1162446694264514
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.032465811835018
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-05-27",
+      "method": "plus_sparsity_interactions",
+      "feature_count": 60,
+      "fit_end": "2023-05-12",
+      "validation_start": "2023-05-13",
+      "validation_end": "2023-05-19",
+      "best_iteration": 197,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.070657233862129
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.1214314273428618
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.0255177220878884
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-03",
+      "method": "plus_sparsity_labels",
+      "feature_count": 53,
+      "fit_end": "2023-05-19",
+      "validation_start": "2023-05-20",
+      "validation_end": "2023-05-26",
+      "best_iteration": 280,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.1072771790752411
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0718743624304135
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.0238961845863117
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-03",
+      "method": "plus_sparsity_interactions",
+      "feature_count": 60,
+      "fit_end": "2023-05-19",
+      "validation_start": "2023-05-20",
+      "validation_end": "2023-05-26",
+      "best_iteration": 460,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.1196658234234418
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0822943923057733
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.033749800320132
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-10",
+      "method": "plus_sparsity_labels",
+      "feature_count": 53,
+      "fit_end": "2023-05-26",
+      "validation_start": "2023-05-27",
+      "validation_end": "2023-06-02",
+      "best_iteration": 258,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.0843888434804732
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.061379412497439
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.093298557083718
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-10",
+      "method": "plus_sparsity_interactions",
+      "feature_count": 60,
+      "fit_end": "2023-05-26",
+      "validation_start": "2023-05-27",
+      "validation_end": "2023-06-02",
+      "best_iteration": 303,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.1090474663809289
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0784606276860669
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.1112100908052063
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-17",
+      "method": "plus_sparsity_interactions",
+      "feature_count": 60,
+      "fit_end": "2023-06-02",
+      "validation_start": "2023-06-03",
+      "validation_end": "2023-06-09",
+      "best_iteration": 403,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.0183707927410472
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.028806977731625
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.0760150937436757
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-17",
+      "method": "plus_sparsity_labels",
+      "feature_count": 53,
+      "fit_end": "2023-06-02",
+      "validation_start": "2023-06-03",
+      "validation_end": "2023-06-09",
+      "best_iteration": 591,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.0278808989210817
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0276992734343282
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.0776656553748998
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-24",
+      "method": "plus_sparsity_labels",
+      "feature_count": 53,
+      "fit_end": "2023-06-09",
+      "validation_start": "2023-06-10",
+      "validation_end": "2023-06-16",
+      "best_iteration": 231,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.0514902048593318
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0429154396342186
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.0345202806752352
+        }
+      ]
+    },
+    {
+      "forecast_origin": "2023-06-24",
+      "method": "plus_sparsity_interactions",
+      "feature_count": 60,
+      "fit_end": "2023-06-09",
+      "validation_start": "2023-06-10",
+      "validation_end": "2023-06-16",
+      "best_iteration": 218,
+      "store_bias_factors": [
+        {
+          "store_id": 3,
+          "store_bias_factor": 1.0511818004392754
+        },
+        {
+          "store_id": 5,
+          "store_bias_factor": 1.0347036556917544
+        },
+        {
+          "store_id": 8,
+          "store_bias_factor": 1.0230639097742498
+        }
+      ]
+    }
+  ],
+  "segment_breakdown": [
+    {
+      "method": "direct_tweedie_1_3",
+      "segment": "sparse",
+      "mae": 0.47511740636724975,
+      "mbe": 0.11968655937847382,
+      "n": 2695
+    },
+    {
+      "method": "direct_tweedie_1_3",
+      "segment": "dense",
+      "mae": 3.3714037428651373,
+      "mbe": 0.40633881285104656,
+      "n": 5705
+    },
+    {
+      "method": "plus_sparsity_labels",
+      "segment": "sparse",
+      "mae": 0.45227322022538147,
+      "mbe": 0.15906315560741444,
+      "n": 2695
+    },
+    {
+      "method": "plus_sparsity_labels",
+      "segment": "dense",
+      "mae": 3.335756425438794,
+      "mbe": 0.6361628083746259,
+      "n": 5705
+    },
+    {
+      "method": "plus_sparsity_interactions",
+      "segment": "sparse",
+      "mae": 0.442626744339227,
+      "mbe": 0.1582027646002425,
+      "n": 2695
+    },
+    {
+      "method": "plus_sparsity_interactions",
+      "segment": "dense",
+      "mae": 3.3630986750011576,
+      "mbe": 0.6888393132704546,
+      "n": 5705
+    }
+  ],
+  "artifacts": {
+    "predictions": "/Users/bytedance/Documents/门店预测kaggle数据/reports/model_quality/fourth_round/fourth_round_predictions.csv.gz",
+    "quality": "/Users/bytedance/Documents/门店预测kaggle数据/reports/model_quality/fourth_round/fourth_round_quality.csv",
+    "summary": "/Users/bytedance/Documents/门店预测kaggle数据/reports/model_quality/fourth_round/fourth_round_summary.csv",
+    "segment_breakdown": "/Users/bytedance/Documents/门店预测kaggle数据/reports/model_quality/fourth_round/fourth_round_segment_breakdown.csv"
+  }
+}

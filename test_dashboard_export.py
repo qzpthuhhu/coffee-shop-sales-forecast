@@ -167,7 +167,7 @@ class DashboardExportTest(unittest.TestCase):
                     )
                 )
         top = risk["by_date"]["2023-06-30"]["__all__"][0]
-        self.assertEqual(top["store"], "Astoria")
+        self.assertEqual(top["store"], "Hell's Kitchen")
         self.assertEqual(top["sku"], 63)
         self.assertEqual(top["product_name_zh"], "焦糖糖浆")
         self.assertAlmostEqual(top["upside_gap"], 9.0)

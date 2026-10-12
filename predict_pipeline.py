@@ -27,6 +27,11 @@ SALES_FILE = DATA_DIR / "Coffee Shop Sales.xlsx"
 WEATHER_FILE = DATA_DIR / "nyc_weather_2023_h1.csv"
 MODEL_DIR = DATA_DIR / "models"
 PREDICTION_LOOKAHEAD = 7
+STORE_NAME_MAP = {
+    3: "Astoria",
+    5: "Lower Manhattan",
+    8: "Hell's Kitchen",
+}
 HISTORY_LAGS = [1, 2, 3, 7, 14, 28]
 HISTORY_WINDOWS = [7, 14, 28]
 LIGHTGBM_PARAMS = {
@@ -93,8 +98,6 @@ def load_and_preprocess():
     sales['date'] = pd.to_datetime(sales['transaction_date'])
     weather = pd.read_csv(WEATHER_FILE, parse_dates=['date'])
 
-    store_map = {3: 'Lower Manhattan', 5: "Hell's Kitchen", 8: 'Astoria'}
-
     # 按 门店 x SKU x 日 聚合
     df = sales.groupby(['date', 'store_id', 'product_id']).agg(
         qty=('transaction_qty', 'sum'),
@@ -102,7 +105,7 @@ def load_and_preprocess():
         category=('product_category', 'first'),
         product_type=('product_type', 'first'),
     ).reset_index()
-    df['store_name'] = df['store_id'].map(store_map)
+    df['store_name'] = df['store_id'].map(STORE_NAME_MAP)
 
     # 构建完整时间面板
     dates = pd.date_range(df['date'].min(), df['date'].max(), freq='D')
@@ -117,7 +120,9 @@ def load_and_preprocess():
 
     df = df_full.merge(df, on=['date', 'store_id', 'product_id'], how='left')
     df['qty'] = df['qty'].fillna(0).astype(int)
-    df['store_name'] = df['store_name'].fillna(df['store_id'].map(store_map))
+    df['store_name'] = df['store_name'].fillna(
+        df['store_id'].map(STORE_NAME_MAP)
+    )
     df['price'] = df['price'].fillna(df.groupby('product_id')['price'].transform('mean'))
     df['price'] = df['price'].fillna(df['price'].mean())
     df['category'] = df['category'].fillna(df.groupby('product_id')['category'].transform('first'))
