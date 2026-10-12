@@ -4,6 +4,7 @@ import json
 import math
 import shutil
 from datetime import datetime, timezone
+from functools import lru_cache
 from pathlib import Path
 
 import pandas as pd
@@ -14,9 +15,111 @@ REPORT_DIR = ROOT / "reports" / "model_quality"
 OUTPUT_FILE = ROOT / "dashboard" / "data.json"
 EXPLANATION_DIR = ROOT / "dashboard" / "explanations"
 SCENARIO_FILE = REPORT_DIR / "rolling_backtest_scenarios.csv.gz"
+SALES_FILE = ROOT / "Coffee Shop Sales.xlsx"
 PREDICTION_COLUMN = "pred_lightgbm"
 TOP_CONTRIBUTIONS = 10
 RISK_RANKING_LIMIT = 10
+
+STORE_LABELS = {
+    "Astoria": "阿斯托利亚",
+    "Hell's Kitchen": "地狱厨房",
+    "Lower Manhattan": "下曼哈顿",
+}
+
+CATEGORY_LABELS = {
+    "Bakery": "烘焙食品",
+    "Branded": "品牌周边",
+    "Coffee": "现制咖啡",
+    "Coffee beans": "咖啡豆",
+    "Drinking Chocolate": "热巧克力原料",
+    "Flavours": "风味糖浆",
+    "Loose Tea": "散装茶叶",
+    "Packaged Chocolate": "包装巧克力",
+    "Tea": "现制茶饮",
+}
+
+TYPE_LABELS = {
+    "Barista Espresso": "意式咖啡",
+    "Biscotti": "意式脆饼",
+    "Black tea": "红茶",
+    "Brewed Black tea": "现泡红茶",
+    "Brewed Chai tea": "现泡印度香料茶",
+    "Brewed Green tea": "现泡绿茶",
+    "Brewed herbal tea": "现泡花草茶",
+    "Chai tea": "印度香料茶",
+    "Clothing": "服装",
+    "Drinking Chocolate": "冲饮巧克力",
+    "Drip coffee": "滴滤咖啡",
+    "Espresso Beans": "意式咖啡豆",
+    "Gourmet Beans": "精品咖啡豆",
+    "Gourmet brewed coffee": "精品手冲咖啡",
+    "Green beans": "生咖啡豆",
+    "Green tea": "绿茶",
+    "Herbal tea": "花草茶",
+    "Hot chocolate": "热巧克力",
+    "House blend Beans": "招牌拼配咖啡豆",
+    "Housewares": "杯具",
+    "Organic Beans": "有机咖啡豆",
+    "Organic Chocolate": "有机巧克力",
+    "Organic brewed coffee": "有机现煮咖啡",
+    "Packaged Chocolate": "包装巧克力",
+    "Pastry": "酥点",
+    "Premium Beans": "高端咖啡豆",
+    "Premium brewed coffee": "高端现煮咖啡",
+    "Regular syrup": "常规糖浆",
+    "Scone": "英式司康",
+    "Sugar free syrup": "无糖糖浆",
+}
+
+PRODUCT_BASE_LABELS = {
+    "Brazilian - Organic": "有机巴西咖啡豆",
+    "Our Old Time Diner Blend": "老时光餐厅拼配咖啡",
+    "Espresso Roast": "意式浓缩烘焙咖啡豆",
+    "Primo Espresso Roast": "普里莫意式浓缩烘焙咖啡豆",
+    "Columbian Medium Roast": "哥伦比亚中度烘焙咖啡",
+    "Ethiopia": "埃塞俄比亚咖啡",
+    "Jamacian Coffee River": "牙买加 Coffee River 咖啡豆",
+    "Jamaican Coffee River": "牙买加 Coffee River 咖啡",
+    "Civet Cat": "猫屎咖啡豆",
+    "Organic Decaf Blend": "有机低因拼配咖啡豆",
+    "Guatemalan Sustainably Grown": "危地马拉可持续种植咖啡豆",
+    "Lemon Grass": "柠檬草茶",
+    "Peppermint": "薄荷茶",
+    "English Breakfast": "英式早餐茶",
+    "Earl Grey": "伯爵茶",
+    "Serenity Green Tea": "静心绿茶",
+    "Traditional Blend Chai": "传统拼配印度香料茶",
+    "Morning Sunrise Chai": "晨曦印度香料茶",
+    "Spicy Eye Opener Chai": "醒神辛香印度香料茶",
+    "Dark chocolate": "黑巧克力",
+    "Sustainably Grown Organic": "可持续种植有机巧克力",
+    "Chili Mayan": "玛雅辣椒巧克力",
+    "Brazilian": "巴西咖啡",
+    "Espresso shot": "浓缩咖啡",
+    "Latte": "拿铁",
+    "Cappuccino": "卡布奇诺",
+    "Carmel syrup": "焦糖糖浆",
+    "Hazelnut syrup": "榛果糖浆",
+    "Sugar Free Vanilla syrup": "无糖香草糖浆",
+    "Hazelnut Biscotti": "榛果意式脆饼",
+    "Cranberry Scone": "蔓越莓司康",
+    "Chocolate Croissant": "巧克力可颂",
+    "Ginger Scone": "姜味司康",
+    "Almond Croissant": "杏仁可颂",
+    "Ginger Biscotti": "姜味意式脆饼",
+    "Croissant": "原味可颂",
+    "Chocolate Chip Biscotti": "巧克力豆意式脆饼",
+    "Oatmeal Scone": "燕麦司康",
+    "Scottish Cream Scone": "苏格兰奶油司康",
+    "Jumbo Savory Scone": "大份咸味司康",
+    "I Need My Bean! T-shirt": "I Need My Bean! T恤",
+    "I Need My Bean! Diner mug": "I Need My Bean! 餐厅马克杯",
+    "I Need My Bean! Latte cup": "I Need My Bean! 拿铁杯",
+    "Chocolate syrup": "巧克力糖浆",
+    "Ouro Brasileiro shot": "巴西黄金浓缩咖啡",
+}
+
+SIZE_LABELS = {"Sm": "小杯", "Rg": "中杯", "Lg": "大杯"}
 
 FEATURE_LABELS = {
     "price": "商品单价",
@@ -55,6 +158,53 @@ FEATURE_LABELS = {
 
 def _round(value, digits=4):
     return round(float(value), digits)
+
+
+def _translate_product_name(product_name):
+    parts = product_name.rsplit(" ", 1)
+    size = SIZE_LABELS.get(parts[-1]) if len(parts) == 2 else None
+    base_name = parts[0] if size else product_name
+    translated = PRODUCT_BASE_LABELS.get(base_name, base_name)
+    return f"{translated}·{size}" if size else translated
+
+
+@lru_cache(maxsize=1)
+def _product_catalog():
+    catalog = (
+        pd.read_excel(
+            SALES_FILE,
+            usecols=[
+                "product_id",
+                "product_category",
+                "product_type",
+                "product_detail",
+            ],
+        )
+        .drop_duplicates("product_id")
+        .rename(columns={"product_detail": "product_name"})
+        .sort_values("product_id")
+    )
+    catalog["product_name_zh"] = catalog["product_name"].map(
+        _translate_product_name
+    )
+    catalog["product_label"] = (
+        catalog["product_name_zh"] + "（" + catalog["product_name"] + "）"
+    )
+    return catalog.reset_index(drop=True)
+
+
+def _with_product_names(predictions):
+    product_columns = {"product_name", "product_name_zh", "product_label"}
+    if product_columns.issubset(predictions.columns):
+        return predictions
+    return predictions.merge(
+        _product_catalog()[
+            ["product_id", "product_name", "product_name_zh", "product_label"]
+        ],
+        on="product_id",
+        how="left",
+        validate="many_to_one",
+    )
 
 
 def _feature_category(feature):
@@ -120,6 +270,30 @@ def _series_by_entity(predictions, entity_column):
     return result
 
 
+def _series_by_product(predictions):
+    grouped = (
+        predictions.groupby(
+            ["product_id", "product_label", "date"],
+            dropna=False,
+        )
+        .agg(actual=("qty", "sum"), pred=(PREDICTION_COLUMN, "sum"))
+        .reset_index()
+        .sort_values(["product_id", "date"])
+    )
+    result = {}
+    for (product_id, product_label), rows in grouped.groupby(
+        ["product_id", "product_label"],
+        dropna=False,
+    ):
+        result[str(int(product_id))] = {
+            "label": product_label,
+            "dates": rows["date"].dt.strftime("%Y-%m-%d").tolist(),
+            "actual": [_round(value, 1) for value in rows["actual"]],
+            "pred": [_round(value, 1) for value in rows["pred"]],
+        }
+    return result
+
+
 def _metric_payload(quality):
     row = quality[
         (quality["level"] == "overall") & (quality["method"] == "lightgbm")
@@ -159,6 +333,9 @@ def _diagnostic_payload(predictions):
             "date": row.date.strftime("%Y-%m-%d"),
             "store": row.store_name,
             "sku": int(row.product_id),
+            "product_name": row.product_name,
+            "product_name_zh": row.product_name_zh,
+            "product_label": row.product_label,
             "error": _round(row.prediction_error, 3),
         }
         for row in sampled.itertuples()
@@ -207,9 +384,26 @@ def _demand_heatmap_payload(predictions):
     dates = sorted(predictions["date"].dt.strftime("%Y-%m-%d").unique())
     rows = []
     for keys, group in predictions.groupby(
-        ["store_name", "category", "product_type", "product_id"], sort=True
+        [
+            "store_name",
+            "category",
+            "product_type",
+            "product_id",
+            "product_name",
+            "product_name_zh",
+            "product_label",
+        ],
+        sort=True,
     ):
-        store, category, product_type, sku = keys
+        (
+            store,
+            category,
+            product_type,
+            sku,
+            product_name,
+            product_name_zh,
+            product_label,
+        ) = keys
         values_by_date = {
             row.date.strftime("%Y-%m-%d"): _round(row.pred_lightgbm, 1)
             for row in group.itertuples()
@@ -219,6 +413,9 @@ def _demand_heatmap_payload(predictions):
             "category": category,
             "type": product_type,
             "sku": int(sku),
+            "product_name": product_name,
+            "product_name_zh": product_name_zh,
+            "product_label": product_label,
             "values": [values_by_date.get(date) for date in dates],
         })
     return {
@@ -257,6 +454,9 @@ def _risk_ranking_payload(predictions):
                     "category": row.category,
                     "type": row.product_type,
                     "sku": int(row.product_id),
+                    "product_name": row.product_name,
+                    "product_name_zh": row.product_name_zh,
+                    "product_label": row.product_label,
                     "prediction": _round(row.pred_lightgbm, 1),
                     "p90": _round(row.pred_p90, 1),
                     "upside_gap": _round(row.upside_gap, 1),
@@ -283,7 +483,7 @@ def _risk_ranking_payload(predictions):
 def build_dashboard_payload(
     predictions, quality, shap_contributions, run_metadata, generated_at=None
 ):
-    predictions = predictions.copy()
+    predictions = _with_product_names(predictions.copy())
     predictions["date"] = pd.to_datetime(predictions["date"])
     generated_at = generated_at or datetime.now(timezone.utc).isoformat()
 
@@ -330,6 +530,9 @@ def build_dashboard_payload(
             "category": row.category,
             "type": row.product_type,
             "sku": int(row.product_id),
+            "product_name": row.product_name,
+            "product_name_zh": row.product_name_zh,
+            "product_label": row.product_label,
             "actual": _round(row.qty, 1),
             "pred": _round(row.pred_lightgbm, 1),
             "error": _round(row.prediction_error, 1),
@@ -339,7 +542,16 @@ def build_dashboard_payload(
 
     hierarchy = (
         predictions[
-            ["store_id", "store_name", "category", "product_type", "product_id"]
+            [
+                "store_id",
+                "store_name",
+                "category",
+                "product_type",
+                "product_id",
+                "product_name",
+                "product_name_zh",
+                "product_label",
+            ]
         ]
         .drop_duplicates()
         .sort_values(["store_name", "category", "product_type", "product_id"])
@@ -351,6 +563,9 @@ def build_dashboard_payload(
             "category": row.category,
             "type": row.product_type,
             "sku": int(row.product_id),
+            "product_name": row.product_name,
+            "product_name_zh": row.product_name_zh,
+            "product_label": row.product_label,
         }
         for row in hierarchy.itertuples()
     ]
@@ -403,8 +618,14 @@ def build_dashboard_payload(
         "store_predictions": _series_by_entity(predictions, "store_name"),
         "category_predictions": _series_by_entity(predictions, "category"),
         "type_predictions": _series_by_entity(predictions, "product_type"),
+        "product_predictions": _series_by_product(predictions),
         "dates": dates,
         "hierarchy": hierarchy_rows,
+        "labels": {
+            "stores": STORE_LABELS,
+            "categories": CATEGORY_LABELS,
+            "types": TYPE_LABELS,
+        },
         "feature_catalog": feature_catalog,
         "scenario_contract": run_metadata["scenario_simulation"],
         "explanation_shards": {
@@ -423,7 +644,7 @@ def build_explanation_shards(
     generated_at,
     scenarios=None,
 ):
-    predictions = predictions.copy()
+    predictions = _with_product_names(predictions.copy())
     predictions["date"] = pd.to_datetime(predictions["date"])
     shap_groups = {
         prediction_id: rows
@@ -470,6 +691,9 @@ def build_explanation_shards(
                 "category": row.category,
                 "type": row.product_type,
                 "sku": int(row.product_id),
+                "product_name": row.product_name,
+                "product_name_zh": row.product_name_zh,
+                "product_label": row.product_label,
                 "actual": _round(row.qty, 3),
                 "prediction": _round(row.pred_lightgbm, 6),
                 "raw_prediction": _round(row.pred_lightgbm_raw, 6),

@@ -75,6 +75,38 @@ class DashboardExportTest(unittest.TestCase):
             "explanations/2023-06-27.json",
         )
 
+    def test_snapshot_exposes_readable_bilingual_product_names(self):
+        products = {
+            row["sku"]: row
+            for row in self.payload["hierarchy"]
+            if row["store"] == "Astoria"
+        }
+
+        self.assertEqual(products[38]["product_name"], "Latte")
+        self.assertEqual(products[38]["product_name_zh"], "拿铁")
+        self.assertEqual(products[38]["product_label"], "拿铁（Latte）")
+        self.assertEqual(
+            products[57]["product_label"],
+            "醒神辛香印度香料茶·大杯（Spicy Eye Opener Chai Lg）",
+        )
+        self.assertEqual(
+            self.payload["labels"]["stores"]["Lower Manhattan"],
+            "下曼哈顿",
+        )
+        self.assertEqual(
+            self.payload["labels"]["categories"]["Coffee"],
+            "现制咖啡",
+        )
+        self.assertEqual(len(self.payload["product_predictions"]), 80)
+        self.assertEqual(
+            self.payload["product_predictions"]["38"]["label"],
+            "拿铁（Latte）",
+        )
+        self.assertEqual(
+            len(self.payload["product_predictions"]["38"]["dates"]),
+            35,
+        )
+
     def test_diagnostics_are_bounded_and_cover_all_errors(self):
         diagnostics = self.payload["diagnostics"]
 
@@ -137,6 +169,7 @@ class DashboardExportTest(unittest.TestCase):
         top = risk["by_date"]["2023-06-30"]["__all__"][0]
         self.assertEqual(top["store"], "Astoria")
         self.assertEqual(top["sku"], 63)
+        self.assertEqual(top["product_name_zh"], "焦糖糖浆")
         self.assertAlmostEqual(top["upside_gap"], 9.0)
 
     def test_explanation_shard_preserves_prediction_additivity(self):
@@ -172,6 +205,9 @@ class DashboardExportTest(unittest.TestCase):
         )
         self.assertTrue(self.payload["feature_catalog"]["qty_lag_1"]["label"])
         self.assertEqual(len(record["scenario_predictions"]), 27)
+        self.assertTrue(record["product_name"])
+        self.assertTrue(record["product_name_zh"])
+        self.assertIn(record["product_name"], record["product_label"])
         self.assertEqual(
             record["scenario_inputs"]["temperature_2m_mean"],
             self.scenarios[
@@ -205,15 +241,23 @@ class DashboardExportTest(unittest.TestCase):
         self.assertNotIn("apiKeyInput", html)
         self.assertNotIn("openrouter_key", html)
         self.assertNotIn("openrouter.ai", html)
-        self.assertIn("Global LightGBM", html)
         self.assertNotIn("HistGradientBoosting", html)
         self.assertNotIn("0.961", html)
         self.assertNotIn("69.6%", html)
-        self.assertIn("模型贡献，不代表因果", html)
-        self.assertIn("逐预测解释", html)
-        self.assertIn("实际值 vs 预测值", html)
+        self.assertNotIn('id="m-wape"', html)
+        self.assertNotIn('id="m-r2"', html)
+        self.assertIn("咖啡门店销量预测助手", html)
+        self.assertIn("商品每日需求热力图", html)
+        self.assertIn("为什么这样预测", html)
+        self.assertIn("productLabel(row)", html)
+        self.assertIn("[hidden] { display:none!important; }", html)
+        self.assertIn('<option value="product">按具体商品查看</option>', html)
+        self.assertIn("DATA.product_predictions", html)
+        self.assertIn('id="chart-context"', html)
+        self.assertIn("不等于真实因果", html)
+        self.assertIn("预测是否贴近实际", html)
         self.assertIn("误差分布", html)
-        self.assertIn("SKU × 日期需求热力图", html)
+        self.assertIn("商品每日需求热力图", html)
         self.assertIn("data-heatmap-row", html)
         self.assertIn("销量日历", html)
         self.assertIn('id="calendar-store"', html)
@@ -224,10 +268,10 @@ class DashboardExportTest(unittest.TestCase):
         self.assertIn('id="scenario-rain"', html)
         self.assertIn('id="scenario-holiday"', html)
         self.assertIn("function renderScenario", html)
-        self.assertIn("高风险 SKU 排名", html)
+        self.assertIn("需要重点关注的商品", html)
         self.assertIn('id="risk-ranking"', html)
         self.assertIn("function renderRiskRanking", html)
-        self.assertIn("不代表缺货概率", html)
+        self.assertIn("不代表一定缺货", html)
 
 
 if __name__ == "__main__":

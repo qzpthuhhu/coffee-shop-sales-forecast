@@ -2,9 +2,9 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <link rel="icon" href="data:,">
-<title>Coffee Shop SKU 智能销量预测台</title>
+<title>咖啡门店销量预测助手</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <style>
 :root {
@@ -14,6 +14,7 @@
   --shadow:0 8px 24px rgba(51,40,33,.07);
 }
 * { box-sizing:border-box; }
+[hidden] { display:none!important; }
 html { color-scheme:light; }
 body {
   margin:0; background:var(--paper); color:var(--ink);
@@ -51,7 +52,7 @@ button:focus-visible,select:focus-visible,a:focus-visible {
   background:var(--blue-soft); color:#294f67; font-size:13px;
 }
 .metrics {
-  display:grid; grid-template-columns:repeat(6,minmax(0,1fr));
+  display:grid; grid-template-columns:repeat(4,minmax(0,1fr));
   border:1px solid var(--line); background:var(--surface); margin-bottom:16px;
 }
 .metric { min-width:0; padding:16px; border-right:1px solid var(--line); }
@@ -59,7 +60,7 @@ button:focus-visible,select:focus-visible,a:focus-visible {
 .metric .label { color:var(--muted); font-size:12px; }
 .metric .value { margin-top:4px; font-size:23px; font-weight:750; color:var(--coffee); }
 .metric .sub { margin-top:2px; color:var(--muted); font-size:11px; }
-.grid { display:grid; grid-template-columns:minmax(0,1.65fr) minmax(300px,.85fr); gap:16px; }
+.grid { display:grid; grid-template-columns:1fr; gap:16px; }
 .panel { background:var(--surface); border:1px solid var(--line); padding:20px; min-width:0; }
 .panel + .panel { margin-top:16px; }
 .grid .panel + .panel { margin-top:0; }
@@ -67,6 +68,18 @@ button:focus-visible,select:focus-visible,a:focus-visible {
 .panel h2 { margin:0; font-size:16px; color:var(--coffee); }
 .panel-kicker { margin:3px 0 0; color:var(--muted); font-size:12px; }
 .chart-wrap { height:340px; position:relative; }
+.primary-chart .chart-wrap { height:320px; }
+.chart-summary {
+  display:grid; grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:1px; margin:0 0 14px; border:1px solid var(--line); background:var(--line);
+}
+.chart-summary div { min-width:0; padding:10px 12px; background:#fcfbf8; }
+.chart-summary div:first-child { grid-column:1/-1; }
+.chart-summary span { display:block; color:var(--muted); font-size:11px; }
+.chart-summary strong {
+  display:block; margin-top:2px; color:var(--coffee); font-size:15px;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
 .diagnostic-grid {
   display:grid; grid-template-columns:minmax(0,1.2fr) minmax(320px,.8fr);
   gap:16px; margin-top:16px;
@@ -256,56 +269,147 @@ tbody tr:hover { background:#faf9f6; }
   color:var(--muted); border:1px dashed var(--line); padding:24px;
 }
 .error { color:var(--cherry); background:var(--red-soft); }
+.model-details { margin-top:16px; }
+.model-details > summary {
+  min-height:48px; display:flex; align-items:center; justify-content:space-between;
+  padding:12px 14px; border:1px solid var(--line); background:var(--surface);
+  color:var(--coffee); font-weight:700; cursor:pointer; list-style:none;
+}
+.model-details > summary::-webkit-details-marker { display:none; }
+.model-details > summary::after { content:"＋"; color:var(--blue); font-size:20px; }
+.model-details[open] > summary::after { content:"－"; }
+.model-details[open] > summary { border-bottom-color:transparent; }
+.model-details > .diagnostic-grid { margin-top:0; }
 .footer { margin-top:20px; color:var(--muted); font-size:11px; text-align:center; }
-@media (max-width:1100px) {
-  .metrics { grid-template-columns:repeat(3,1fr); }
-  .metric:nth-child(3) { border-right:0; }
-  .metric:nth-child(-n+3) { border-bottom:1px solid var(--line); }
-  .grid { grid-template-columns:1fr; }
-  .diagnostic-grid { grid-template-columns:1fr; }
-  .explain-layout { grid-template-columns:240px minmax(0,1fr); }
-  .prediction-metrics { grid-template-columns:repeat(3,1fr); }
-  .prediction-metric:nth-child(3) { border-right:0; }
-  .prediction-metric:nth-child(-n+3) { border-bottom:1px solid var(--line); }
-  .scenario-layout { grid-template-columns:1fr; }
+
+/* Mobile first: the phone experience is the default, larger layouts enhance it. */
+.shell {
+  width:100%; max-width:1440px; padding:0 12px calc(32px + env(safe-area-inset-bottom));
 }
-@media (max-width:760px) {
-  .shell { padding:0 14px 32px; }
-  .topbar { align-items:flex-start; padding:15px 0; }
-  .brand h1 { font-size:17px; }
-  .brand p { font-size:11px; }
-  .run-state { font-size:11px; }
-  .tabs { overflow-x:auto; }
-  .tab { min-height:44px; white-space:nowrap; }
-  .metrics { grid-template-columns:repeat(2,1fr); }
-  .metric,.metric:nth-child(3) { border-right:1px solid var(--line); border-bottom:1px solid var(--line); }
-  .metric:nth-child(2n) { border-right:0; }
-  .metric:nth-last-child(-n+2) { border-bottom:0; }
-  .metric .value { font-size:20px; }
-  .panel { padding:15px; }
-  .panel-head,.prediction-header { flex-direction:column; }
-  .controls,.controls .field { width:100%; }
-  .controls select { width:100%; }
-  .chart-wrap { height:300px; }
-  .calendar-grid { grid-template-columns:repeat(7,82px); min-width:604px; }
-  .calendar-scroll { overflow-x:auto; padding-bottom:4px; }
-  .calendar-day { min-height:104px; padding:7px; }
-  .explain-layout { grid-template-columns:1fr; }
-  .filter-panel { position:static; }
+.topbar {
+  min-height:auto; padding:14px 0 12px; align-items:flex-start; gap:8px;
+  flex-direction:column;
+}
+.brand h1 { font-size:19px; line-height:1.25; }
+.brand p { margin-top:5px; font-size:12px; }
+.run-state { font-size:12px; }
+.tabs {
+  position:sticky; top:0; z-index:20; margin-inline:-12px; padding:8px 12px;
+  overflow-x:auto; background:rgba(247,245,240,.96); border-bottom:1px solid var(--line);
+  scrollbar-width:none;
+}
+.tabs::-webkit-scrollbar { display:none; }
+.tab { min-height:44px; flex:1 0 auto; white-space:nowrap; }
+.notice { margin-top:8px; padding:10px 12px; font-size:12px; }
+.metrics { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.metric { padding:13px 12px; border-bottom:1px solid var(--line); }
+.metric:nth-child(2n) { border-right:0; }
+.metric:nth-last-child(-n+2) { border-bottom:0; }
+.metric .value { font-size:21px; }
+.metric .sub { line-height:1.35; }
+.grid,.diagnostic-grid,.explain-layout,.scenario-layout { grid-template-columns:1fr; }
+.panel { padding:14px; }
+.panel + .panel,.grid .panel + .panel { margin-top:12px; }
+.panel-head,.prediction-header { flex-direction:column; gap:10px; }
+.controls,.controls .field,.field { width:100%; min-width:0; }
+.field select { width:100%; min-height:44px; font-size:16px; }
+.chart-wrap { height:260px; }
+.diagnostic-grid .chart-wrap { height:260px; }
+.heatmap-wrap { max-height:440px; }
+.heatmap-table .heatmap-label { width:176px; max-width:176px; }
+.heatmap-cell { width:40px; height:40px; font-size:10px; }
+.calendar-grid { grid-template-columns:repeat(7,76px); min-width:550px; }
+.calendar-scroll { overflow-x:auto; padding-bottom:6px; scroll-snap-type:x proximity; }
+.calendar-day { min-height:98px; padding:7px; }
+.calendar-date span { display:none; }
+.calendar-values { font-size:10px; }
+.calendar-values span { display:none; }
+.filter-panel { position:static; }
+.filter-stack { grid-template-columns:1fr; }
+.prediction-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.prediction-metric {
+  border-right:1px solid var(--line); border-bottom:1px solid var(--line);
+  padding:11px 10px;
+}
+.prediction-metric:nth-child(2n) { border-right:0; }
+.prediction-metric:nth-last-child(-n+2) { border-bottom:0; }
+.prediction-metric strong { font-size:16px; overflow-wrap:anywhere; }
+.interval { grid-column:span 1; }
+.quality-tag { white-space:normal; }
+.scenario-controls { grid-template-columns:1fr; }
+.scenario-result { grid-template-columns:1fr; }
+.scenario-result div { border-right:0; border-bottom:1px solid var(--line); }
+.scenario-result div:last-child { border-bottom:0; }
+.wf-row { grid-template-columns:92px minmax(90px,1fr) 54px; gap:6px; }
+.wf-name strong { white-space:normal; line-height:1.25; }
+.contribution-list { grid-template-columns:1fr; }
+.table-wrap:not(.heatmap-wrap) { overflow:visible; }
+.table-wrap:not(.heatmap-wrap) table,
+.table-wrap:not(.heatmap-wrap) tbody,
+.table-wrap:not(.heatmap-wrap) tr,
+.table-wrap:not(.heatmap-wrap) td { display:block; width:100%; }
+.table-wrap:not(.heatmap-wrap) thead { display:none; }
+.table-wrap:not(.heatmap-wrap) tr {
+  margin-bottom:10px; padding:10px 12px; border:1px solid var(--line);
+  background:#fcfbf8;
+}
+.table-wrap:not(.heatmap-wrap) td {
+  display:flex; justify-content:space-between; align-items:flex-start; gap:14px;
+  padding:6px 0; border:0; text-align:right; overflow-wrap:anywhere;
+}
+.table-wrap:not(.heatmap-wrap) td::before {
+  content:attr(data-label); flex:0 0 92px; color:var(--muted); text-align:left;
+  font-size:12px;
+}
+.table-wrap:not(.heatmap-wrap) td.product-cell {
+  display:block; text-align:left; padding-bottom:9px; border-bottom:1px solid #ebe8e1;
+}
+.table-wrap:not(.heatmap-wrap) td.product-cell::before {
+  display:block; margin-bottom:3px; font-size:11px;
+}
+.link-button { min-height:36px; padding:7px 0; }
+.trace-id { display:none; }
+
+@media (min-width:640px) {
+  .shell { padding-inline:20px; }
+  .topbar { flex-direction:row; align-items:center; min-height:72px; padding:0; }
+  .tabs { position:static; margin-inline:0; padding:16px 0 12px; border-bottom:0; background:transparent; }
+  .tab { flex:0 0 auto; }
   .filter-stack { grid-template-columns:repeat(2,minmax(0,1fr)); }
-  .prediction-metrics { grid-template-columns:repeat(2,1fr); }
-  .prediction-metric,.prediction-metric:nth-child(3) { border-right:1px solid var(--line); border-bottom:1px solid var(--line); }
-  .prediction-metric:nth-child(2n) { border-right:0; }
-  .prediction-metric:nth-last-child(-n+2) { border-bottom:0; }
+  .scenario-result { grid-template-columns:repeat(3,minmax(0,1fr)); }
+  .scenario-result div { border-right:1px solid var(--line); border-bottom:0; }
+  .scenario-result div:last-child { border-right:0; }
+  .prediction-metrics { grid-template-columns:repeat(3,minmax(0,1fr)); }
+  .prediction-metric:nth-child(2n) { border-right:1px solid var(--line); }
+  .prediction-metric:nth-child(3n) { border-right:0; }
+  .prediction-metric:nth-last-child(-n+3) { border-bottom:0; }
   .interval { grid-column:span 1; }
-  .scenario-controls { grid-template-columns:1fr; }
-  .wf-row { grid-template-columns:minmax(110px,150px) minmax(130px,1fr) 64px; gap:7px; }
-  .contribution-list { grid-template-columns:1fr; }
+  .table-wrap:not(.heatmap-wrap) { overflow-x:auto; }
+  .table-wrap:not(.heatmap-wrap) table { display:table; }
+  .table-wrap:not(.heatmap-wrap) thead { display:table-header-group; }
+  .table-wrap:not(.heatmap-wrap) tbody { display:table-row-group; }
+  .table-wrap:not(.heatmap-wrap) tr { display:table-row; padding:0; border:0; background:transparent; }
+  .table-wrap:not(.heatmap-wrap) td { display:table-cell; width:auto; padding:10px 8px; border-bottom:1px solid #ebe8e1; text-align:left; }
+  .table-wrap:not(.heatmap-wrap) td::before { display:none; }
+  .table-wrap:not(.heatmap-wrap) td.product-cell { display:table-cell; border-bottom:1px solid #ebe8e1; padding:10px 8px; }
+  .trace-id { display:block; }
 }
-@media (max-width:380px) {
-  .shell { padding-inline:10px; }
-  .filter-stack { grid-template-columns:1fr; }
-  .wf-row { grid-template-columns:86px minmax(86px,1fr) 50px; gap:6px; }
+
+@media (min-width:900px) {
+  .shell { padding-inline:28px; }
+  .diagnostic-grid { grid-template-columns:minmax(0,1.2fr) minmax(320px,.8fr); }
+  .explain-layout { grid-template-columns:260px minmax(0,1fr); }
+  .filter-panel { position:sticky; top:12px; }
+  .scenario-layout { grid-template-columns:minmax(0,1.2fr) minmax(280px,.8fr); }
+  .contribution-list { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .chart-wrap { height:340px; }
+  .primary-chart .chart-wrap { height:420px; }
+  .chart-summary { grid-template-columns:2fr repeat(3,1fr); }
+  .chart-summary div:first-child { grid-column:auto; }
+}
+
+@media (pointer:coarse) {
+  button,select { min-height:44px; }
 }
 </style>
 </head>
@@ -313,52 +417,57 @@ tbody tr:hover { background:#faf9f6; }
 <main class="shell">
   <header class="topbar">
     <div class="brand">
-      <h1>Coffee Shop SKU 智能销量预测台</h1>
-      <p id="scope">正在读取可信滚动回测产物</p>
+      <h1>咖啡门店销量预测助手</h1>
+      <p id="scope">正在加载门店与商品预测</p>
     </div>
-    <div class="run-state" id="run-state">数据加载中</div>
+    <div class="run-state" id="run-state">正在准备</div>
   </header>
 
   <nav class="tabs" aria-label="分析视图">
-    <button class="tab active" data-tab="overview" aria-selected="true">经营总览</button>
-    <button class="tab" data-tab="explain" aria-selected="false">逐预测解释</button>
+    <button class="tab active" data-tab="overview" aria-selected="true">销量预测</button>
+    <button class="tab" data-tab="explain" aria-selected="false">为什么这样预测</button>
   </nav>
 
   <div id="fatal-error" class="error" hidden></div>
 
   <section id="overview" class="tab-panel">
     <div class="notice" id="limitation"></div>
-    <div class="metrics" aria-label="滚动回测指标">
-      <div class="metric"><div class="label">MAE</div><div class="value" id="m-mae">--</div><div class="sub">杯 / SKU / 日</div></div>
-      <div class="metric"><div class="label">WAPE</div><div class="value" id="m-wape">--</div><div class="sub">五窗口整体</div></div>
-      <div class="metric"><div class="label">R²</div><div class="value" id="m-r2">--</div><div class="sub">解释方差</div></div>
-      <div class="metric"><div class="label">P10-P90 覆盖率</div><div class="value" id="m-cover">--</div><div class="sub">CQR 边际覆盖</div></div>
-      <div class="metric"><div class="label">区间平均宽度</div><div class="value" id="m-width">--</div><div class="sub">杯 / SKU / 日</div></div>
-      <div class="metric"><div class="label">验证样本</div><div class="value" id="m-samples">--</div><div class="sub">门店 × SKU × 日</div></div>
+    <div class="metrics" aria-label="客户可读的预测表现">
+      <div class="metric"><div class="label">平均偏差</div><div class="value" id="m-mae">--</div><div class="sub">每款商品每天</div></div>
+      <div class="metric"><div class="label">预测范围命中</div><div class="value" id="m-cover">--</div><div class="sub">实际销量落在范围内</div></div>
+      <div class="metric"><div class="label">连续验证</div><div class="value" id="m-days">--</div><div class="sub">覆盖不同营业日期</div></div>
+      <div class="metric"><div class="label">商品数量</div><div class="value" id="m-products">--</div><div class="sub">每家门店均可查看</div></div>
     </div>
 
     <div class="grid">
-      <section class="panel">
+      <section class="panel primary-chart">
         <div class="panel-head">
           <div>
-            <h2>实际销量与点预测</h2>
-            <p class="panel-kicker">单位：杯；误差为实际值减预测值</p>
+            <h2>实际销量与预测销量</h2>
+            <p class="panel-kicker">实线是实际销量，虚线是预测销量</p>
           </div>
           <div class="controls">
             <div class="field">
-              <label for="level">聚合层级</label>
+              <label for="level">查看方式</label>
               <select id="level">
-                <option value="daily">全部门店</option>
-                <option value="store">门店</option>
-                <option value="category">品类</option>
-                <option value="type">子类型</option>
+                <option value="daily">全部门店总销量</option>
+                <option value="store">按门店查看</option>
+                <option value="category">按品类查看</option>
+                <option value="type">按商品类型查看</option>
+                <option value="product">按具体商品查看</option>
               </select>
             </div>
             <div class="field" id="entity-field" hidden>
-              <label for="entity">分析对象</label>
+              <label for="entity" id="entity-label">选择对象</label>
               <select id="entity"></select>
             </div>
           </div>
+        </div>
+        <div class="chart-summary" aria-label="当前销量趋势摘要">
+          <div><span>当前查看</span><strong id="chart-context">全部门店总销量</strong></div>
+          <div><span>日均实际</span><strong id="chart-actual-average">--</strong></div>
+          <div><span>日均预测</span><strong id="chart-pred-average">--</strong></div>
+          <div><span>平均相差</span><strong id="chart-error-average">--</strong></div>
         </div>
         <div class="chart-wrap"><canvas id="prediction-chart" aria-label="实际销量与预测销量图"></canvas></div>
       </section>
@@ -366,8 +475,8 @@ tbody tr:hover { background:#faf9f6; }
       <section class="panel">
         <div class="panel-head">
           <div>
-            <h2>模型依赖因素</h2>
-            <p class="panel-kicker">TreeSHAP 平均绝对贡献，单位：杯</p>
+            <h2>销量主要受什么影响</h2>
+            <p class="panel-kicker">条形越长，模型越重视该因素</p>
           </div>
         </div>
         <div class="fi-list" id="feature-importance"></div>
@@ -377,8 +486,8 @@ tbody tr:hover { background:#faf9f6; }
     <section class="panel" style="margin-top:16px">
       <div class="panel-head">
         <div>
-          <h2>SKU × 日期需求热力图</h2>
-          <p class="panel-kicker" id="heatmap-note">点预测，单位：杯 / SKU / 日；点击单元格查看逐预测证据</p>
+          <h2>商品每日需求热力图</h2>
+          <p class="panel-kicker" id="heatmap-note">颜色越深，预计销量越高；点击数字查看原因</p>
         </div>
         <div class="controls">
           <div class="field">
@@ -391,7 +500,7 @@ tbody tr:hover { background:#faf9f6; }
           </div>
         </div>
       </div>
-      <div class="heatmap-wrap" id="heatmap-wrap" aria-label="SKU 与日期点预测热力图"></div>
+      <div class="heatmap-wrap" id="heatmap-wrap" aria-label="商品与日期预测销量热力图"></div>
       <div class="diagnostic-summary">
         <span id="heatmap-range">--</span>
         <span class="heatmap-legend"><span>低</span><span class="heatmap-ramp"></span><span>高</span></span>
@@ -402,8 +511,8 @@ tbody tr:hover { background:#faf9f6; }
     <section class="panel" style="margin-top:16px">
       <div class="panel-head">
         <div>
-          <h2>高风险 SKU 排名</h2>
-          <p class="panel-kicker" id="risk-note">按 P90 高于点预测的潜在追加需求排序，单位：杯</p>
+          <h2>需要重点关注的商品</h2>
+          <p class="panel-kicker" id="risk-note">预测波动较大的商品优先展示</p>
         </div>
         <div class="controls">
           <div class="field">
@@ -418,18 +527,18 @@ tbody tr:hover { background:#faf9f6; }
       </div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>排名</th><th>门店</th><th>品类 / 子类型</th><th>SKU</th><th>点预测</th><th>P90</th><th>追加需求</th><th>区间宽度</th><th>证据</th></tr></thead>
+          <thead><tr><th>排名</th><th>门店</th><th>商品名称</th><th>预计销量</th><th>建议关注上限</th><th>可能增加</th><th>查看</th></tr></thead>
           <tbody id="risk-ranking"></tbody>
         </table>
       </div>
-      <p class="risk-boundary">这是模型区间的备货关注度，不代表缺货概率。当前未接入库存、在途、保质期或 BOM 数据。</p>
+      <p class="risk-boundary">这里表示销量可能高于常规预测，适合提醒门店多关注；尚未接入库存和在途数据，因此不代表一定缺货。</p>
     </section>
 
     <section class="panel" style="margin-top:16px">
       <div class="panel-head">
         <div>
-          <h2>销量日历</h2>
-          <p class="panel-kicker" id="calendar-note">实际与预测日总量，单位：杯；误差 = 实际值 - 预测值</p>
+          <h2>每日销量日历</h2>
+          <p class="panel-kicker" id="calendar-note">按天对比实际销量和预测销量</p>
         </div>
         <div class="controls">
           <div class="field">
@@ -451,12 +560,14 @@ tbody tr:hover { background:#faf9f6; }
       </div>
     </section>
 
+    <details class="model-details">
+      <summary>查看模型验证与偏差明细</summary>
     <div class="diagnostic-grid">
       <section class="panel">
         <div class="panel-head">
           <div>
-            <h2>实际值 vs 预测值</h2>
-            <p class="panel-kicker" id="scatter-note">单位：杯 / SKU / 日；虚线代表完全准确</p>
+            <h2>预测是否贴近实际</h2>
+            <p class="panel-kicker" id="scatter-note">越靠近斜线，预测越接近实际销量</p>
           </div>
         </div>
         <div class="chart-wrap"><canvas id="scatter-chart" aria-label="实际销量与预测销量散点图"></canvas></div>
@@ -465,8 +576,8 @@ tbody tr:hover { background:#faf9f6; }
       <section class="panel">
         <div class="panel-head">
           <div>
-            <h2>误差分布</h2>
-            <p class="panel-kicker">误差 = 实际值 - 预测值；正值表示模型低估</p>
+            <h2>预测偏差分布</h2>
+            <p class="panel-kicker">查看模型通常会多估还是少估</p>
           </div>
         </div>
         <div class="chart-wrap"><canvas id="error-histogram" aria-label="预测误差分布直方图"></canvas></div>
@@ -481,37 +592,38 @@ tbody tr:hover { background:#faf9f6; }
     <section class="panel" style="margin-top:16px">
       <div class="panel-head">
         <div>
-          <h2>高偏差预测</h2>
-          <p class="panel-kicker">点击 prediction_id 进入逐预测证据链</p>
+          <h2>偏差较大的预测</h2>
+          <p class="panel-kicker">点击“查看原因”可定位具体商品和日期</p>
         </div>
       </div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>日期</th><th>门店</th><th>品类 / 子类型</th><th>SKU</th><th>实际</th><th>预测</th><th>误差</th><th>证据</th></tr></thead>
+          <thead><tr><th>日期</th><th>门店</th><th>商品名称</th><th>实际销量</th><th>预测销量</th><th>相差</th><th>查看</th></tr></thead>
           <tbody id="error-table"></tbody>
         </table>
       </div>
     </section>
+    </details>
   </section>
 
   <section id="explain" class="tab-panel" hidden>
-    <div class="notice">SHAP 展示模型对当前预测的贡献方向与杯数。模型贡献，不代表因果；业务根因仍需结合促销、库存、客流等外部证据验证。</div>
+    <div class="notice">这里解释模型为什么给出当前销量。影响因素表示模型判断依据，不等于真实因果；促销、库存和客流仍需结合业务信息确认。</div>
     <div class="explain-layout">
       <aside class="panel filter-panel">
-        <h2>预测对象</h2>
-        <p class="panel-kicker" style="margin-bottom:14px">按门店 → 品类 → 子类型 → SKU → 日期筛选</p>
+        <h2>选择要查看的商品</h2>
+        <p class="panel-kicker" style="margin-bottom:14px">依次选择门店、品类、商品类型、具体商品和日期</p>
         <div class="filter-stack">
           <div class="field"><label for="f-store">门店</label><select id="f-store"></select></div>
           <div class="field"><label for="f-category">品类</label><select id="f-category"></select></div>
-          <div class="field"><label for="f-type">子类型</label><select id="f-type"></select></div>
-          <div class="field"><label for="f-sku">SKU</label><select id="f-sku"></select></div>
+          <div class="field"><label for="f-type">商品类型</label><select id="f-type"></select></div>
+          <div class="field"><label for="f-sku">具体商品</label><select id="f-sku"></select></div>
           <div class="field"><label for="f-date">日期</label><select id="f-date"></select></div>
         </div>
         <div class="trace-id" id="trace-id">尚未选择预测</div>
       </aside>
 
       <div class="explain-main">
-        <div id="explanation-loading" class="loading">正在读取逐预测证据...</div>
+        <div id="explanation-loading" class="loading">正在读取这款商品的预测原因...</div>
         <div id="explanation-error" class="error" hidden></div>
         <article id="explanation-content" hidden>
           <section class="panel">
@@ -520,20 +632,20 @@ tbody tr:hover { background:#faf9f6; }
                 <h2 id="prediction-title"></h2>
                 <p id="prediction-subtitle"></p>
               </div>
-              <div class="quality-tag">逐行加法已校验</div>
+              <div class="quality-tag">解释已核对</div>
             </div>
             <div class="prediction-metrics">
               <div class="prediction-metric"><span>实际销量</span><strong id="p-actual">--</strong></div>
-              <div class="prediction-metric"><span>点预测</span><strong id="p-prediction">--</strong></div>
-              <div class="prediction-metric"><span>预测误差</span><strong id="p-error">--</strong></div>
-              <div class="prediction-metric interval"><span>P10 / P50 / P90</span><strong id="p-interval">--</strong></div>
-              <div class="prediction-metric"><span>预测步长</span><strong id="p-horizon">--</strong></div>
-              <div class="prediction-metric"><span>模型基准值</span><strong id="p-base">--</strong></div>
+              <div class="prediction-metric"><span>预测销量</span><strong id="p-prediction">--</strong></div>
+              <div class="prediction-metric"><span>与实际相差</span><strong id="p-error">--</strong></div>
+              <div class="prediction-metric interval"><span>合理预测范围</span><strong id="p-interval">--</strong></div>
+              <div class="prediction-metric"><span>提前预测</span><strong id="p-horizon">--</strong></div>
+              <div class="prediction-metric"><span>日常基础销量</span><strong id="p-base">--</strong></div>
             </div>
             <div class="panel-head">
               <div>
-                <h2>SHAP 瀑布图</h2>
-                <p class="panel-kicker">基准值 + 44 项贡献 = 原始模型输出；非负裁剪与门店偏差校准均独立展示</p>
+                <h2>预测因素拆解</h2>
+                <p class="panel-kicker">绿色因素推高销量，红色因素压低销量</p>
               </div>
             </div>
             <div class="waterfall" id="waterfall"></div>
@@ -542,8 +654,8 @@ tbody tr:hover { background:#faf9f6; }
           <section class="panel">
             <div class="panel-head">
               <div>
-                <h2>天气与节假日 What-if</h2>
-                <p class="panel-kicker">对当前门店 × SKU × 日期重新运行同一 LightGBM 点模型</p>
+                <h2>天气与节假日情景模拟</h2>
+                <p class="panel-kicker">试着改变天气条件，查看模型预测如何变化</p>
               </div>
             </div>
             <div class="scenario-layout">
@@ -566,9 +678,9 @@ tbody tr:hover { background:#faf9f6; }
                 <p class="scenario-warning">模型响应模拟，不是因果推断。结果只反映模型在受控输入下的输出变化，不能证明天气或节假日会造成同等销量变化。</p>
               </div>
               <div class="scenario-result" aria-live="polite">
-                <div><span>原始点预测</span><strong id="scenario-baseline">--</strong></div>
-                <div><span>模拟点预测</span><strong id="scenario-prediction">--</strong></div>
-                <div><span>模型响应</span><strong id="scenario-delta">--</strong></div>
+                <div><span>当前预测</span><strong id="scenario-baseline">--</strong></div>
+                <div><span>情景预测</span><strong id="scenario-prediction">--</strong></div>
+                <div><span>预计变化</span><strong id="scenario-delta">--</strong></div>
               </div>
             </div>
           </section>
@@ -576,8 +688,8 @@ tbody tr:hover { background:#faf9f6; }
           <section class="panel">
             <div class="panel-head">
               <div>
-                <h2>因素证据明细</h2>
-                <p class="panel-kicker">Top 10 因素显示原始特征值、方向、贡献杯数与中文业务解释</p>
+                <h2>主要影响因素</h2>
+                <p class="panel-kicker">按影响大小排列，并说明推高或压低了多少销量</p>
               </div>
             </div>
             <div class="contribution-list" id="contribution-list"></div>
@@ -587,7 +699,7 @@ tbody tr:hover { background:#faf9f6; }
     </div>
   </section>
 
-  <footer class="footer" id="footer">Global LightGBM · 加载模型批次...</footer>
+  <footer class="footer" id="footer">正在加载预测版本信息...</footer>
 </main>
 
 <script>
@@ -596,12 +708,17 @@ let chart = null;
 let scatterChart = null;
 let histogramChart = null;
 let currentExplanation = null;
+let diagnosticsRendered = false;
 const shardCache = new Map();
 const COLORS = { actual:'#332821', prediction:'#356b8c', error:'#b4463e' };
 
 const byId = id => document.getElementById(id);
 const fmt = (value, digits=1) => Number(value).toLocaleString('zh-CN', { maximumFractionDigits:digits, minimumFractionDigits:digits });
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+const storeLabel = value => DATA?.labels?.stores?.[value] || value;
+const categoryLabel = value => DATA?.labels?.categories?.[value] || value;
+const typeLabel = value => DATA?.labels?.types?.[value] || value;
+const productLabel = row => row?.product_label || row?.product_name_zh || row?.product_name || `商品编号 ${row?.sku}`;
 
 function setOptions(select, values, formatter=value => value) {
   select.innerHTML = values.map(value => `<option value="${esc(value)}">${esc(formatter(value))}</option>`).join('');
@@ -616,16 +733,14 @@ function showFatal(message) {
 function renderMetrics() {
   const m = DATA.metrics;
   const meta = DATA.metadata;
-  byId('m-mae').textContent = fmt(m.mae, 3);
-  byId('m-wape').textContent = `${fmt(m.wape, 1)}%`;
-  byId('m-r2').textContent = fmt(m.r2, 3);
+  byId('m-mae').textContent = `${fmt(m.mae, 1)} 杯`;
   byId('m-cover').textContent = `${fmt(m.interval_coverage, 1)}%`;
-  byId('m-width').textContent = fmt(m.interval_mean_width, 2);
-  byId('m-samples').textContent = meta.sample_count.toLocaleString('zh-CN');
-  byId('scope').textContent = `${meta.validation_start} 至 ${meta.validation_end} · ${meta.backtest_windows} 个滚动起点 · 未来 1-7 天`;
-  byId('run-state').textContent = m.candidate_eligible ? '候选模型' : '未通过候选门槛';
-  byId('limitation').textContent = `验证边界：${meta.limitations.join(' ')}`;
-  byId('footer').textContent = `${meta.model_name} · ${meta.model_run_id} · ${meta.feature_count} 个特征 · 产物生成于 ${meta.artifact_generated_at}`;
+  byId('m-days').textContent = `${meta.validation_days} 天`;
+  byId('m-products').textContent = `${new Set(DATA.hierarchy.map(row => row.sku)).size} 款`;
+  byId('scope').textContent = `${meta.validation_start} 至 ${meta.validation_end} · 已验证未来 1～7 天预测`;
+  byId('run-state').textContent = m.candidate_eligible ? '预测可用于演示' : '预测仍在优化';
+  byId('limitation').textContent = `这些结果来自 ${meta.validation_days} 天历史滚动验证，可用于理解预测能力；真实经营仍需结合促销、库存和门店活动。`;
+  byId('footer').textContent = `预测版本 ${meta.model_run_id} · 数据生成于 ${meta.artifact_generated_at}`;
 }
 
 function currentSeries() {
@@ -634,12 +749,42 @@ function currentSeries() {
     const rows = DATA.daily_predictions;
     return { dates:rows.map(row => row.date), actual:rows.map(row => row.actual), pred:rows.map(row => row.pred) };
   }
-  const source = level === 'store' ? DATA.store_predictions : level === 'category' ? DATA.category_predictions : DATA.type_predictions;
+  const source = level === 'store'
+    ? DATA.store_predictions
+    : level === 'category'
+      ? DATA.category_predictions
+      : level === 'type'
+        ? DATA.type_predictions
+        : DATA.product_predictions;
   return source[byId('entity').value];
 }
 
 function renderChart() {
   const series = currentSeries();
+  if (!series) {
+    byId('chart-context').textContent = '暂无可用数据';
+    return;
+  }
+  const values = [...series.actual, ...series.pred].filter(Number.isFinite);
+  const minimum = Math.min(...values);
+  const maximum = Math.max(...values);
+  const padding = Math.max((maximum - minimum) * .12, maximum * .025, 1);
+  const yMinimum = Math.max(0, Math.floor((minimum - padding) / 10) * 10);
+  const yMaximum = Math.ceil((maximum + padding) / 10) * 10;
+  const average = rows => rows.reduce((sum, value) => sum + value, 0) / rows.length;
+  const meanAbsoluteError = series.actual.reduce(
+    (sum, value, index) => sum + Math.abs(value - series.pred[index]),
+    0,
+  ) / series.actual.length;
+  const level = byId('level').value;
+  const context = level === 'daily'
+    ? '全部门店总销量'
+    : byId('entity').options[byId('entity').selectedIndex]?.textContent || '当前对象';
+  byId('chart-context').textContent = context;
+  byId('chart-context').title = context;
+  byId('chart-actual-average').textContent = `${fmt(average(series.actual), 0)} 杯`;
+  byId('chart-pred-average').textContent = `${fmt(average(series.pred), 0)} 杯`;
+  byId('chart-error-average').textContent = `${fmt(meanAbsoluteError, 1)} 杯`;
   if (chart) chart.destroy();
   chart = new Chart(byId('prediction-chart'), {
     type:'line',
@@ -647,7 +792,7 @@ function renderChart() {
       labels:series.dates.map(date => date.slice(5)),
       datasets:[
         { label:'实际销量', data:series.actual, borderColor:COLORS.actual, backgroundColor:'transparent', borderWidth:2, pointRadius:2, tension:.2 },
-        { label:'点预测', data:series.pred, borderColor:COLORS.prediction, backgroundColor:'transparent', borderWidth:2, borderDash:[5,4], pointRadius:2, tension:.2 }
+        { label:'预测销量', data:series.pred, borderColor:COLORS.prediction, backgroundColor:'transparent', borderWidth:2, borderDash:[5,4], pointRadius:2, tension:.2 }
       ]
     },
     options:{
@@ -658,7 +803,13 @@ function renderChart() {
       },
       scales:{
         x:{ grid:{ display:false }, ticks:{ color:'#6d6a63', maxRotation:0, autoSkip:true, maxTicksLimit:10 } },
-        y:{ beginAtZero:true, title:{ display:true, text:'杯', color:'#6d6a63' }, grid:{ color:'#ebe8e1' }, ticks:{ color:'#6d6a63' } }
+        y:{
+          min:yMinimum,
+          max:yMaximum,
+          title:{ display:true, text:'销量（杯）', color:'#6d6a63' },
+          grid:{ color:'#ebe8e1' },
+          ticks:{ color:'#6d6a63' }
+        }
       }
     }
   });
@@ -669,10 +820,31 @@ function updateEntityOptions() {
   const field = byId('entity-field');
   if (level === 'daily') {
     field.hidden = true;
+    byId('entity').innerHTML = '';
   } else {
     field.hidden = false;
-    const source = level === 'store' ? DATA.store_predictions : level === 'category' ? DATA.category_predictions : DATA.type_predictions;
-    setOptions(byId('entity'), Object.keys(source));
+    const source = level === 'store'
+      ? DATA.store_predictions
+      : level === 'category'
+        ? DATA.category_predictions
+        : level === 'type'
+          ? DATA.type_predictions
+          : DATA.product_predictions;
+    const formatter = level === 'store'
+      ? storeLabel
+      : level === 'category'
+        ? categoryLabel
+        : level === 'type'
+          ? typeLabel
+          : value => source[value].label;
+    const labels = {
+      store:'选择门店',
+      category:'选择品类',
+      type:'选择商品类型',
+      product:'选择具体商品',
+    };
+    byId('entity-label').textContent = labels[level];
+    setOptions(byId('entity'), Object.keys(source), formatter);
   }
   renderChart();
 }
@@ -683,14 +855,14 @@ function renderFeatureImportance() {
     <div class="fi-row" title="${esc(item.feature)}">
       <div class="fi-label">${esc(item.label)}</div>
       <div class="fi-track"><div class="fi-fill" style="width:${Math.max(2,item.importance/max*100)}%"></div></div>
-      <div class="fi-value">${fmt(item.importance, 3)}</div>
+      <div class="fi-value">${item.importance / max >= .66 ? '高' : item.importance / max >= .33 ? '中' : '低'}</div>
     </div>
   `).join('');
 }
 
 function initializeHeatmap() {
   const rows = DATA.demand_heatmap.rows;
-  setOptions(byId('heatmap-store'), unique(rows, 'store'));
+  setOptions(byId('heatmap-store'), unique(rows, 'store'), storeLabel);
   refreshHeatmapCategories();
   byId('heatmap-store').addEventListener('change', refreshHeatmapCategories);
   byId('heatmap-category').addEventListener('change', renderHeatmap);
@@ -698,7 +870,7 @@ function initializeHeatmap() {
 
 function refreshHeatmapCategories() {
   const rows = DATA.demand_heatmap.rows.filter(row => row.store === byId('heatmap-store').value);
-  setOptions(byId('heatmap-category'), unique(rows, 'category'));
+  setOptions(byId('heatmap-category'), unique(rows, 'category'), categoryLabel);
   renderHeatmap();
 }
 
@@ -724,19 +896,19 @@ function renderHeatmap() {
   const body = rows.map(row => `
     <tr>
       <th scope="row" class="heatmap-label">
-        <strong>SKU ${row.sku} · ${esc(row.type)}</strong>
-        <span>${esc(row.store)} / ${esc(row.category)}</span>
+        <strong>${esc(productLabel(row))}</strong>
+        <span>${esc(typeLabel(row.type))} · 编号 ${row.sku}</span>
       </th>
       ${row.values.map((value, index) => {
         const date = heatmap.dates[index];
-        const label = `${row.store}，SKU ${row.sku}，${date}，点预测 ${fmt(value,1)} 杯`;
+        const label = `${storeLabel(row.store)}，${productLabel(row)}，${date}，预计 ${fmt(value,1)} 杯`;
         return `<td><button class="heatmap-cell" style="background:${heatmapColor(value, maximum)}" aria-label="${esc(label)}" title="${esc(label)}" data-heatmap-row="${row.sku}" data-heatmap-date="${date}">${Math.round(value)}</button></td>`;
       }).join('')}
     </tr>
   `).join('');
-  byId('heatmap-wrap').innerHTML = `<table class="heatmap-table"><thead><tr><th class="heatmap-label">SKU / 子类型</th>${header}</tr></thead><tbody>${body}</tbody></table>`;
-  byId('heatmap-note').textContent = `${heatmap.value}，单位：${heatmap.unit}；点击单元格查看逐预测证据`;
-  byId('heatmap-range').textContent = `${heatmap.dates[0]} 至 ${heatmap.dates.at(-1)} · ${rows.length} 个 SKU · 色阶上限 ${fmt(maximum,1)} 杯`;
+  byId('heatmap-wrap').innerHTML = `<table class="heatmap-table"><thead><tr><th class="heatmap-label">具体商品</th>${header}</tr></thead><tbody>${body}</tbody></table>`;
+  byId('heatmap-note').textContent = `预计销量，单位：杯 / 商品 / 日；点击数字查看预测原因`;
+  byId('heatmap-range').textContent = `${heatmap.dates[0]} 至 ${heatmap.dates.at(-1)} · ${rows.length} 款商品`;
   document.querySelectorAll('[data-heatmap-row]').forEach(button => {
     button.addEventListener('click', () => openHeatmapPrediction(
       rows.find(row => row.sku === Number(button.dataset.heatmapRow)),
@@ -753,7 +925,7 @@ function initializeRiskRanking() {
   setOptions(
     byId('risk-store'),
     ['__all__', ...stores],
-    value => value === '__all__' ? '全部门店' : value
+    value => value === '__all__' ? '全部门店' : storeLabel(value)
   );
   byId('risk-date').addEventListener('change', renderRiskRanking);
   byId('risk-store').addEventListener('change', renderRiskRanking);
@@ -765,19 +937,20 @@ function renderRiskRanking() {
   const date = byId('risk-date').value;
   const store = byId('risk-store').value;
   const rows = risk.by_date[date]?.[store] || [];
-  byId('risk-note').textContent = `${date} · ${risk.metric}，单位：${risk.unit}；榜单不使用实际销量`;
+  byId('risk-note').textContent = `${date} · 按销量可能上浮的杯数排序`;
   if (!rows.length) {
-    byId('risk-ranking').innerHTML = '<tr><td colspan="9">当前筛选范围没有可用风险记录。</td></tr>';
+    byId('risk-ranking').innerHTML = '<tr><td colspan="7">当前筛选范围没有需要关注的商品。</td></tr>';
     return;
   }
   byId('risk-ranking').innerHTML = rows.map((row, index) => `
     <tr>
-      <td>${index + 1}</td><td>${esc(row.store)}</td>
-      <td>${esc(row.category)} / ${esc(row.type)}</td><td>${row.sku}</td>
-      <td>${fmt(row.prediction,1)}</td><td>${fmt(row.p90,1)}</td>
-      <td class="negative">+${fmt(row.upside_gap,1)}</td>
-      <td>${fmt(row.interval_width,1)}</td>
-      <td><button class="link-button" data-risk-index="${index}">查看解释</button></td>
+      <td data-label="排名">${index + 1}</td>
+      <td data-label="门店">${esc(storeLabel(row.store))}</td>
+      <td data-label="商品名称" class="product-cell"><strong>${esc(productLabel(row))}</strong><br><small>${esc(categoryLabel(row.category))} · ${esc(typeLabel(row.type))} · 编号 ${row.sku}</small></td>
+      <td data-label="预计销量">${fmt(row.prediction,1)} 杯</td>
+      <td data-label="建议关注上限">${fmt(row.p90,1)} 杯</td>
+      <td data-label="可能增加" class="negative">+${fmt(row.upside_gap,1)} 杯</td>
+      <td data-label="查看"><button class="link-button" data-risk-index="${index}">查看原因</button></td>
     </tr>
   `).join('');
   document.querySelectorAll('[data-risk-index]').forEach(button => {
@@ -792,7 +965,7 @@ function initializeCalendar() {
   setOptions(
     byId('calendar-store'),
     ['__all__', ...stores],
-    value => value === '__all__' ? '全部门店' : value
+    value => value === '__all__' ? '全部门店' : storeLabel(value)
   );
   byId('calendar-store').addEventListener('change', renderCalendar);
   renderCalendar();
@@ -844,10 +1017,10 @@ function renderCalendar() {
       </article>`;
   }).join('');
   calendar.innerHTML = headers + placeholders + days;
-  const storeLabel = byId('calendar-store').value === '__all__'
+  const selectedStoreLabel = byId('calendar-store').value === '__all__'
     ? '全部门店'
-    : byId('calendar-store').value;
-  byId('calendar-note').textContent = `${storeLabel}实际与预测日总量，单位：杯；误差 = 实际值 - 预测值`;
+    : storeLabel(byId('calendar-store').value);
+  byId('calendar-note').textContent = `${selectedStoreLabel}每日实际销量与预测销量`;
   byId('calendar-range').textContent = `${rows[0].date} 至 ${rows.at(-1).date} · ${rows.length} 天`;
 }
 
@@ -864,7 +1037,7 @@ function renderDiagnostics() {
     data:{
       datasets:[
         ...stores.map((store, index) => ({
-          label:store,
+          label:storeLabel(store),
           data:diagnostics.scatter.filter(point => point.store === store),
           borderColor:storeColors[index % storeColors.length],
           backgroundColor:`${storeColors[index % storeColors.length]}99`,
@@ -891,7 +1064,7 @@ function renderDiagnostics() {
           label:context => {
             if (context.dataset.label === '完全准确') return '完全准确线';
             const point = context.raw;
-            return `${point.store} · ${point.date} · SKU ${point.sku}: 实际 ${fmt(point.x,1)}，预测 ${fmt(point.y,1)}，误差 ${point.error >= 0 ? '+' : ''}${fmt(point.error,1)} 杯`;
+            return `${storeLabel(point.store)} · ${point.product_label || `商品编号 ${point.sku}`} · ${point.date}：实际 ${fmt(point.x,1)}，预测 ${fmt(point.y,1)} 杯`;
           }
         }}
       },
@@ -933,20 +1106,35 @@ function renderDiagnostics() {
       }
     }
   });
-  byId('scatter-note').textContent = `单位：杯 / SKU / 日；虚线代表完全准确。${diagnostics.scatter_sampling}`;
+  byId('scatter-note').textContent = `每个点代表一款商品某一天的销量；越靠近斜线越准确。`;
   byId('mean-error').textContent = `${diagnostics.mean_error >= 0 ? '+' : ''}${fmt(diagnostics.mean_error,3)} 杯`;
   byId('underprediction-rate').textContent = `${fmt(diagnostics.underprediction_rate,1)}%`;
   byId('histogram-samples').textContent = diagnostics.histogram_sample_count.toLocaleString('zh-CN');
 }
 
+function initializeModelDetails() {
+  const details = document.querySelector('.model-details');
+  const ensureDiagnostics = () => {
+    if (!details.open || diagnosticsRendered) return;
+    requestAnimationFrame(() => {
+      renderDiagnostics();
+      diagnosticsRendered = true;
+    });
+  };
+  details.addEventListener('toggle', ensureDiagnostics);
+  ensureDiagnostics();
+}
+
 function renderErrorTable() {
   byId('error-table').innerHTML = DATA.top_errors.map(row => `
     <tr>
-      <td>${esc(row.date)}</td><td>${esc(row.store)}</td>
-      <td>${esc(row.category)} / ${esc(row.type)}</td><td>${row.sku}</td>
-      <td>${fmt(row.actual,1)}</td><td>${fmt(row.pred,1)}</td>
-      <td class="${row.error >= 0 ? 'positive' : 'negative'}">${row.error >= 0 ? '+' : ''}${fmt(row.error,1)}</td>
-      <td><button class="link-button" data-prediction="${esc(row.prediction_id)}">查看解释</button></td>
+      <td data-label="日期">${esc(row.date)}</td>
+      <td data-label="门店">${esc(storeLabel(row.store))}</td>
+      <td data-label="商品名称" class="product-cell"><strong>${esc(productLabel(row))}</strong><br><small>${esc(categoryLabel(row.category))} · ${esc(typeLabel(row.type))} · 编号 ${row.sku}</small></td>
+      <td data-label="实际销量">${fmt(row.actual,1)} 杯</td>
+      <td data-label="预测销量">${fmt(row.pred,1)} 杯</td>
+      <td data-label="相差" class="${row.error >= 0 ? 'positive' : 'negative'}">${row.error >= 0 ? '+' : ''}${fmt(row.error,1)} 杯</td>
+      <td data-label="查看"><button class="link-button" data-prediction="${esc(row.prediction_id)}">查看原因</button></td>
     </tr>
   `).join('');
   document.querySelectorAll('[data-prediction]').forEach(button => {
@@ -967,7 +1155,7 @@ function unique(rows, field) {
 }
 
 function initializeFilters() {
-  setOptions(byId('f-store'), unique(DATA.hierarchy, 'store'));
+  setOptions(byId('f-store'), unique(DATA.hierarchy, 'store'), storeLabel);
   refreshCategories();
   setOptions(byId('f-date'), [...DATA.dates].reverse());
   ['f-store','f-category','f-type','f-sku','f-date'].forEach(id => {
@@ -982,21 +1170,22 @@ function initializeFilters() {
 
 function refreshCategories(selected) {
   const rows = hierarchyRows({ store:byId('f-store').value });
-  setOptions(byId('f-category'), unique(rows, 'category'));
+  setOptions(byId('f-category'), unique(rows, 'category'), categoryLabel);
   if (selected) byId('f-category').value = selected;
   refreshTypes();
 }
 
 function refreshTypes(selected) {
   const rows = hierarchyRows({ store:byId('f-store').value, category:byId('f-category').value });
-  setOptions(byId('f-type'), unique(rows, 'type'));
+  setOptions(byId('f-type'), unique(rows, 'type'), typeLabel);
   if (selected) byId('f-type').value = selected;
   refreshSkus();
 }
 
 function refreshSkus(selected) {
   const rows = hierarchyRows({ store:byId('f-store').value, category:byId('f-category').value, type:byId('f-type').value });
-  setOptions(byId('f-sku'), unique(rows, 'sku'), value => `SKU ${value}`);
+  const labelBySku = new Map(rows.map(row => [row.sku, `${productLabel(row)} · 编号 ${row.sku}`]));
+  setOptions(byId('f-sku'), unique(rows, 'sku'), value => labelBySku.get(value));
   if (selected !== undefined) byId('f-sku').value = String(selected);
 }
 
@@ -1032,14 +1221,14 @@ async function loadSelectedExplanation() {
 
 function renderExplanation(record) {
   currentExplanation = record;
-  byId('prediction-title').textContent = `${record.store} · SKU ${record.sku}`;
-  byId('prediction-subtitle').textContent = `${record.date} · ${record.category} / ${record.type} · 起点 ${record.forecast_origin}`;
+  byId('prediction-title').textContent = productLabel(record);
+  byId('prediction-subtitle').textContent = `${storeLabel(record.store)} · ${record.date} · ${categoryLabel(record.category)} / ${typeLabel(record.type)} · 商品编号 ${record.sku}`;
   byId('p-actual').textContent = `${fmt(record.actual,1)} 杯`;
   byId('p-prediction').textContent = `${fmt(record.prediction,1)} 杯`;
   byId('p-error').textContent = `${record.error >= 0 ? '+' : ''}${fmt(record.error,1)} 杯`;
   byId('p-error').className = record.error >= 0 ? 'positive' : 'negative';
   byId('p-interval').textContent = `${fmt(record.p10,1)} / ${fmt(record.p50,1)} / ${fmt(record.p90,1)} 杯`;
-  byId('p-horizon').textContent = `T+${record.horizon_day}`;
+  byId('p-horizon').textContent = `${record.horizon_day} 天`;
   byId('p-base').textContent = `${fmt(record.base_value,2)} 杯`;
   byId('trace-id').innerHTML = `prediction_id<br><strong>${esc(record.prediction_id)}</strong><br><br>model_run_id<br><strong>${esc(record.model_run_id)}</strong>`;
   renderWaterfall(record);
@@ -1127,27 +1316,27 @@ function renderScenario(record, reset=true) {
   byId('scenario-delta').className = displayedDelta >= 0 ? 'positive' : 'negative';
   byId('scenario-evidence').textContent = (
     `输入：平均气温 ${fmt(temperatureValue,1)}°C，降水 ${fmt(precipitationValue,1)} mm，${holidayValue}。`
-    + ` 历史需求、价格、其余天气输入和门店校准因子 ×${fmt(record.store_bias_factor,3)} 保持不变；P10-P90 未重新估计。`
+    + ` 历史销量、商品价格和其他条件保持不变；预测范围不会随情景同步重算。`
   );
 }
 
 function renderWaterfall(record) {
   const steps = [];
   let current = record.base_value;
-  steps.push({ label:'模型基准值', meta:'expected value', start:current, end:current, value:current, kind:'base' });
+  steps.push({ label:'日常基础销量', meta:'模型计算起点', start:current, end:current, value:current, kind:'base' });
   record.contributions.forEach(item => {
     const next = current + item.contribution;
-    steps.push({ label:DATA.feature_catalog[item.feature].label, meta:item.value === null ? '合并项' : `原始值 ${item.value}`, start:current, end:next, value:item.contribution, kind:item.contribution >= 0 ? 'increase' : 'decrease' });
+    steps.push({ label:DATA.feature_catalog[item.feature].label, meta:item.value === null ? '其他较小因素' : `当前值 ${item.value}`, start:current, end:next, value:item.contribution, kind:item.contribution >= 0 ? 'increase' : 'decrease' });
     current = next;
   });
-  steps.push({ label:'原始模型输出', meta:`加法误差 ${record.additivity_error}`, start:record.raw_prediction, end:record.raw_prediction, value:record.raw_prediction, kind:'final' });
+  steps.push({ label:'因素合计结果', meta:'影响因素加总', start:record.raw_prediction, end:record.raw_prediction, value:record.raw_prediction, kind:'final' });
   if (Math.abs(record.postprocess_adjustment) > 1e-9) {
-    steps.push({ label:'非负后处理', meta:'独立于 SHAP', start:record.raw_prediction, end:record.model_prediction, value:record.postprocess_adjustment, kind:'increase' });
+    steps.push({ label:'销量下限修正', meta:'销量不会低于零', start:record.raw_prediction, end:record.model_prediction, value:record.postprocess_adjustment, kind:'increase' });
   }
   if (Math.abs(record.store_bias_adjustment) > 1e-9) {
-    steps.push({ label:'门店偏差校准', meta:`前置窗口因子 ×${fmt(record.store_bias_factor,3)}`, start:record.model_prediction, end:record.prediction, value:record.store_bias_adjustment, kind:record.store_bias_adjustment >= 0 ? 'increase' : 'decrease' });
+    steps.push({ label:'门店历史修正', meta:'结合该门店近期偏差', start:record.model_prediction, end:record.prediction, value:record.store_bias_adjustment, kind:record.store_bias_adjustment >= 0 ? 'increase' : 'decrease' });
   }
-  steps.push({ label:'最终点预测', meta:'页面使用值', start:record.prediction, end:record.prediction, value:record.prediction, kind:'final' });
+  steps.push({ label:'最终预测销量', meta:'当前页面展示值', start:record.prediction, end:record.prediction, value:record.prediction, kind:'final' });
   const values = steps.flatMap(step => [step.start, step.end, 0]);
   const min = Math.min(...values);
   const max = Math.max(...values);
@@ -1206,6 +1395,15 @@ function initializeInteractions() {
   }));
   byId('level').addEventListener('change', updateEntityOptions);
   byId('entity').addEventListener('change', renderChart);
+  let resizeTimer;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      chart?.resize();
+      scatterChart?.resize();
+      histogramChart?.resize();
+    }, 80);
+  });
 }
 
 async function init() {
@@ -1220,8 +1418,8 @@ async function init() {
     initializeHeatmap();
     initializeRiskRanking();
     initializeCalendar();
-    renderDiagnostics();
     renderErrorTable();
+    initializeModelDetails();
     initializeScenarioControls();
     initializeFilters();
     await loadSelectedExplanation();
