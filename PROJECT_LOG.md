@@ -11,12 +11,12 @@
 | 防数据泄露特征 | 70% | 已移除预测日实际 `sku_share`，改为前 28 天历史滚动占比；星期均值仅使用历史标签；新增 Lag 28 和 6 项回归测试 |
 | 真实 LightGBM 与区间 | 90% | 官方 `lightgbm.LGBMRegressor` 单一全局点模型及 P10/P50/P90 quantile 模型已进入 5 窗口回测；P10/P90 已用独立的起点前 7 天窗口做 split conformal 校准 |
 | 滚动回测与基线 | 80% | 已实现 5 个固定 7 天滚动起点、三类起点安全基线，以及含区间覆盖率/宽度的多层级质量报告 |
-| 逐预测 SHAP | 80% | 8,400 条回测预测均已保存稳定 ID、base value、原始特征值及 44 项带符号 TreeSHAP；尚未接入业务解释与前端瀑布图 |
+| 逐预测 SHAP | 95% | 8,400 条回测预测均已保存稳定 ID、base value、原始特征值及 44 项带符号 TreeSHAP；Dashboard 已支持五级筛选、瀑布图、中文业务解释与证据追溯 |
 | 妙搭全栈 | 0% | 尚无本地 `.spark/meta.json`；应用检索被 `spark:app:read` 用户授权阻塞，未创建应用 |
-| Dashboard | 30% | 已由真实 LightGBM 产物可重复生成可信快照；终态仍需迁移到妙搭受控 API |
+| Dashboard | 50% | 已切换到五窗口滚动回测真源，并接入逐预测 P10/P50/P90 与 SHAP 解释；终态仍需迁移到妙搭受控 API 并补齐其他分析视图 |
 | Agent | 0% | 已移除浏览器直连 OpenRouter 和本地密钥存储；合规的服务端 Pi ReAct Agent 尚未开始 |
 
-> 当前可信离线证据来自 `models/*.csv`、由 `export_dashboard_data.py` 生成的 `dashboard/data.json` 和本日志。旧 Dashboard 中的 0.8 杯 MAE、0.961 R²、69.6%/92.9% 命中率已判定为受标签泄露污染的历史结果，并已从运行页面删除。
+> 当前可信离线证据来自 `reports/model_quality/*`、由 `export_dashboard_data.py` 生成的 `dashboard/data.json`、按日期分片的逐预测解释和本日志。旧 Dashboard 中的 0.8 杯 MAE、0.961 R²、69.6%/92.9% 命中率已判定为受标签泄露污染的历史结果，并已从运行页面删除。
 
 ---
 
@@ -135,6 +135,8 @@
 - 当前全局 SHAP top 3：`qty_roll_mean_7d`（1.589 杯）、`qty_roll_mean_28d`（0.881 杯）、`qty_lag_28`（0.391 杯）
 - 五窗口 8,400 条回测预测已全部持久化稳定 `prediction_id`、模型原始输出、非负后处理、base value 和 44 项逐特征带符号贡献，共 369,600 条解释明细
 - 回测 TreeSHAP 最大逐行加法误差为 `5.51e-14`；82 条负原始输出的非负裁剪另存 `postprocess_adjustment`，不伪装为 SHAP 贡献
+- Dashboard 可按门店、品类、子类型、SKU、日期选择任意预测；瀑布图展示 Top 10 贡献与其余 34 项合并贡献，并单列非负后处理
+- 中文业务解释明确区分模型贡献与因果结论；浏览器每次仅加载一个日期分片，完整 44 项明细仍以压缩回测产物为审计真源
 - 生成 LLM 根因分析提示词，对接柠季「寻因」需求
 
 ---
@@ -151,6 +153,9 @@
 ├── test_backtest_pipeline.py       # 滚动回测、防未来标签读取与报告合同测试
 ├── root_cause_prompt.txt           # LLM 根因分析提示词
 ├── PROJECT_LOG.md                  # 本文件
+├── dashboard/
+│   ├── data.json                   # 五窗口总览、层级目录与分片索引
+│   └── explanations/               # 35 个按日期加载的逐预测解释分片
 ├── reports/model_quality/
 │   ├── rolling_backtest_run.json   # 数据哈希、特征、参数、训练窗口与产物索引
 │   ├── rolling_backtest_quality.csv
@@ -189,6 +194,18 @@
 ---
 
 ## 八、迭代记录
+
+### 2026-10-12：滚动回测 Dashboard 与逐预测 SHAP 解释中心
+
+- Dashboard 数据源由单次 7 天留出结果切换为五窗口滚动回测真源：8,400 条样本、MAE 2.655、WAPE 38.2%、R² 0.592、P10-P90 覆盖率 80.6%。
+- 新增门店 → 品类 → 子类型 → SKU → 日期五级筛选；任意预测均可查看实际值、点预测、P10/P50/P90、误差、预测步长、批次和 `prediction_id`。
+- 新增逐预测 SHAP 瀑布图及因素证据明细，展示 base value、Top 10 带符号贡献、原始特征值、中文业务解释、其余 34 项合并贡献、原始输出和独立后处理调整。
+- 逐预测数据按 35 个日期分片按需加载，首屏 JSON 为 84KB，解释分片总计约 12MB；浏览器不一次性加载 369,600 条 SHAP 明细。
+- 24 项 Python 回归测试、Python/JavaScript 语法、差异格式和敏感值检查通过。
+- Playwright 验证 1440×1000、390×844、320×568：高偏差记录直达和级联筛选正常，无页面横向溢出，窄屏图表非空（9,654 个非透明像素），控制台 0 错误。
+- 妙搭应用检索仍缺 `spark:app:read`；托管凭证禁止 `auth login`，因此未创建、发布或修改任何妙搭资源。
+
+下一项唯一优先事项：由宿主授权通道补齐妙搭 `spark:app:read`，随后按名称检索并仅在无同名应用时创建唯一 `full_stack` 开发态应用。
 
 ### 2026-10-12：起点安全的 Split Conformal 区间校准
 

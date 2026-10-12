@@ -1,18 +1,53 @@
-"""Build the static dashboard snapshot from the latest trusted model artifacts."""
+"""Build the static dashboard snapshot from trusted rolling-backtest artifacts."""
 
 import json
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
-from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 
 ROOT = Path(__file__).parent
-MODEL_DIR = ROOT / "models"
+REPORT_DIR = ROOT / "reports" / "model_quality"
 OUTPUT_FILE = ROOT / "dashboard" / "data.json"
+EXPLANATION_DIR = ROOT / "dashboard" / "explanations"
 PREDICTION_COLUMN = "pred_lightgbm"
+TOP_CONTRIBUTIONS = 10
+
+FEATURE_LABELS = {
+    "price": "商品单价",
+    "sku_share_28d": "历史 SKU 销量占比（28 天）",
+    "day_of_week": "星期",
+    "is_weekend": "是否周末",
+    "month": "月份",
+    "day_of_month": "月内日期",
+    "week_of_month": "月内周次",
+    "is_month_start": "是否月初",
+    "is_month_end": "是否月末",
+    "season_code": "季节",
+    "week_of_season": "季内周次",
+    "temperature_2m_max": "最高气温",
+    "temperature_2m_min": "最低气温",
+    "temperature_2m_mean": "平均气温",
+    "precipitation_sum": "降水量",
+    "is_rain": "是否下雨",
+    "is_snow": "是否下雪",
+    "is_clear": "是否晴朗",
+    "sunshine_duration": "日照时长",
+    "wind_speed_10m_max": "最大风速",
+    "relative_humidity_2m_mean": "平均湿度",
+    "is_holiday_detailed": "节假日",
+    "is_pre_holiday_1d": "节前 1 天",
+    "is_pre_holiday_3d": "节前 3 天",
+    "is_post_holiday_1d": "节后 1 天",
+    "is_long_weekend": "是否长周末",
+    "holiday_impact_code": "节假日影响编码",
+    "temp_range": "昼夜温差",
+    "is_hot": "是否高温",
+    "is_cold": "是否低温",
+    "price_vs_category_avg": "相对品类均价",
+}
 
 
 def _round(value, digits=4):
@@ -21,16 +56,48 @@ def _round(value, digits=4):
 
 def _feature_category(feature):
     if feature.startswith(("qty_", "sku_share_")):
-        return "时序"
-    if feature.startswith(("temperature_", "precipitation", "is_rain", "is_snow",
-                           "is_clear", "sunshine_", "wind_", "relative_humidity",
-                           "temp_range", "is_hot", "is_cold")):
+        return "历史销量"
+    if feature.startswith((
+        "temperature_", "precipitation", "is_rain", "is_snow", "is_clear",
+        "sunshine_", "wind_", "relative_humidity", "temp_range", "is_hot",
+        "is_cold",
+    )):
         return "天气"
     if "holiday" in feature or feature == "is_long_weekend":
         return "节假日"
     if feature in {"price", "price_vs_category_avg"}:
-        return "价格"
+        return "商品"
     return "日历"
+
+
+def _feature_label(feature):
+    if feature in FEATURE_LABELS:
+        return FEATURE_LABELS[feature]
+    if feature.startswith("qty_lag_"):
+        return f"{feature.removeprefix('qty_lag_')} 天前销量"
+    if feature.startswith("qty_roll_mean_"):
+        return f"历史 {feature.removeprefix('qty_roll_mean_').removesuffix('d')} 天平均销量"
+    if feature.startswith("qty_roll_std_"):
+        return f"历史 {feature.removeprefix('qty_roll_std_').removesuffix('d')} 天销量波动"
+    if feature == "qty_dow_avg":
+        return "历史同星期平均销量"
+    return feature
+
+
+def _business_explanation(feature, contribution):
+    category = _feature_category(feature)
+    direction = "推高" if contribution >= 0 else "压低"
+    context = {
+        "历史销量": "历史需求状态",
+        "天气": "预测日天气输入",
+        "节假日": "节假日及前后窗口",
+        "商品": "商品价格与品类位置",
+        "日历": "预测日日历位置",
+    }[category]
+    return (
+        f"模型根据{context}，将该因素与基准值相比识别为{direction}销量的信号；"
+        "这是模型贡献，不代表因果关系。"
+    )
 
 
 def _series_by_entity(predictions, entity_column):
@@ -50,47 +117,68 @@ def _series_by_entity(predictions, entity_column):
     return result
 
 
-def build_dashboard_payload(predictions, daily, importance, generated_at=None):
-    predictions = predictions.copy()
-    daily = daily.copy()
-    predictions["date"] = pd.to_datetime(predictions["date"])
-    daily["date"] = pd.to_datetime(daily["date"])
-
-    actual = predictions["qty"].to_numpy()
-    predicted = predictions[PREDICTION_COLUMN].to_numpy()
-    errors = actual - predicted
-    relative_errors = np.abs(errors / (actual + 1))
-
-    metrics = {
-        "mae": _round(mean_absolute_error(actual, predicted), 2),
-        "rmse": _round(np.sqrt(mean_squared_error(actual, predicted)), 2),
-        "r2": _round(r2_score(actual, predicted), 3),
-        "within_10pct": _round((relative_errors < 0.10).mean() * 100, 1),
-        "within_20pct": _round((relative_errors < 0.20).mean() * 100, 1),
+def _metric_payload(quality):
+    row = quality[
+        (quality["level"] == "overall") & (quality["method"] == "lightgbm")
+    ].iloc[0]
+    return {
+        "mae": _round(row["mae"], 3),
+        "rmse": _round(row["rmse"], 3),
+        "wape": _round(row["wape"] * 100, 1),
+        "r2": _round(row["r2"], 3),
+        "within_10pct": _round(row["within_10pct"] * 100, 1),
+        "within_20pct": _round(row["within_20pct"] * 100, 1),
+        "interval_coverage": _round(row["interval_coverage"] * 100, 1),
+        "interval_mean_width": _round(row["interval_mean_width"], 2),
+        "candidate_eligible": bool(row["candidate_eligible"]),
     }
 
-    daily_rows = []
-    for row in daily.sort_values("date").itertuples():
-        daily_rows.append({
+
+def build_dashboard_payload(
+    predictions, quality, shap_contributions, run_metadata, generated_at=None
+):
+    predictions = predictions.copy()
+    predictions["date"] = pd.to_datetime(predictions["date"])
+    generated_at = generated_at or datetime.now(timezone.utc).isoformat()
+
+    daily = (
+        predictions.groupby("date")
+        .agg(actual=("qty", "sum"), pred=(PREDICTION_COLUMN, "sum"))
+        .reset_index()
+        .sort_values("date")
+    )
+    daily_rows = [
+        {
             "date": row.date.strftime("%Y-%m-%d"),
             "actual": _round(row.actual, 1),
-            "pred": _round(row.predicted, 1),
-            "error": _round(row.error, 1),
-            "error_pct": _round(row.error_pct * 100, 1),
-        })
+            "pred": _round(row.pred, 1),
+            "error": _round(row.actual - row.pred, 1),
+        }
+        for row in daily.itertuples()
+    ]
 
+    importance = (
+        shap_contributions.assign(
+            absolute_contribution=shap_contributions["shap_contribution"].abs()
+        )
+        .groupby("feature", as_index=False)["absolute_contribution"]
+        .mean()
+        .sort_values("absolute_contribution", ascending=False)
+        .head(15)
+    )
     feature_importance = [
         {
             "feature": row.feature,
-            "importance": _round(row.shap_importance, 6),
+            "label": _feature_label(row.feature),
+            "importance": _round(row.absolute_contribution, 6),
             "category": _feature_category(row.feature),
         }
-        for row in importance.head(15).itertuples()
+        for row in importance.itertuples()
     ]
 
-    error_rows = predictions.assign(abs_error=np.abs(errors)).nlargest(10, "abs_error")
     top_errors = [
         {
+            "prediction_id": row.prediction_id,
             "date": row.date.strftime("%Y-%m-%d"),
             "store": row.store_name,
             "category": row.category,
@@ -98,79 +186,190 @@ def build_dashboard_payload(predictions, daily, importance, generated_at=None):
             "sku": int(row.product_id),
             "actual": _round(row.qty, 1),
             "pred": _round(row.pred_lightgbm, 1),
-            "error": _round(row.error, 1),
+            "error": _round(row.prediction_error, 1),
         }
-        for row in error_rows.itertuples()
+        for row in predictions.nlargest(10, "absolute_error").itertuples()
     ]
 
-    first_by_date = (
-        predictions.sort_values(["date", "store_id", "product_id"])
-        .drop_duplicates("date")
-        .set_index("date")
+    hierarchy = (
+        predictions[
+            ["store_id", "store_name", "category", "product_type", "product_id"]
+        ]
+        .drop_duplicates()
+        .sort_values(["store_name", "category", "product_type", "product_id"])
     )
-    weather_info = {}
-    for date, row in first_by_date.iterrows():
-        weather_info[date.strftime("%Y-%m-%d")] = {
-            "temp_mean": _round(row["temperature_2m_mean"], 1),
-            "precipitation": _round(row["precipitation_sum"], 1),
-            "is_rain": bool(row["is_rain"]),
-            "is_holiday": bool(row["is_holiday_detailed"]),
-            "is_long_weekend": bool(row["is_long_weekend"]),
+    hierarchy_rows = [
+        {
+            "store_id": int(row.store_id),
+            "store": row.store_name,
+            "category": row.category,
+            "type": row.product_type,
+            "sku": int(row.product_id),
         }
-
-    feature_columns = [
-        column for column in predictions.columns
-        if column not in {
-            "date", "store_id", "store_name", "product_id", "category",
-            "product_type", "qty", "dow", "holiday_impact",
-            "pred_lightgbm", "error", "error_pct",
-        }
+        for row in hierarchy.itertuples()
     ]
-    generated_at = generated_at or datetime.now(timezone.utc).isoformat()
+
     start = predictions["date"].min().strftime("%Y-%m-%d")
     end = predictions["date"].max().strftime("%Y-%m-%d")
-
+    dates = sorted(predictions["date"].dt.strftime("%Y-%m-%d").unique())
+    feature_catalog = {
+        feature: {
+            "label": _feature_label(feature),
+            "category": _feature_category(feature),
+            "increase_explanation": _business_explanation(feature, 1),
+            "decrease_explanation": _business_explanation(feature, -1),
+        }
+        for feature in sorted(shap_contributions["feature"].unique())
+    }
+    feature_catalog["other_features"] = {
+        "label": f"其他 {run_metadata['feature_count'] - TOP_CONTRIBUTIONS} 项因素",
+        "category": "其他",
+        "increase_explanation": (
+            "为保证瀑布图与原始模型输出可核对，其余较小贡献合并展示；"
+            "完整 44 项明细保留在回测 SHAP 产物中。"
+        ),
+        "decrease_explanation": (
+            "为保证瀑布图与原始模型输出可核对，其余较小贡献合并展示；"
+            "完整 44 项明细保留在回测 SHAP 产物中。"
+        ),
+    }
     return {
         "metadata": {
-            "model_name": "Global LightGBM (lightgbm.LGBMRegressor)",
+            "model_run_id": run_metadata["run_id"],
+            "model_name": run_metadata["model_name"],
+            "candidate_status": run_metadata["candidate_status"],
             "validation_start": start,
             "validation_end": end,
             "validation_days": int(predictions["date"].nunique()),
+            "backtest_windows": int(run_metadata["backtest_window_count"]),
             "sample_count": int(len(predictions)),
-            "feature_count": len(feature_columns),
+            "feature_count": int(run_metadata["feature_count"]),
             "generated_at": generated_at,
-            "limitation": "Single 7-day holdout; not production accuracy.",
+            "artifact_generated_at": run_metadata["generated_at"],
+            "limitations": run_metadata["limitations"],
         },
-        "metrics": metrics,
+        "metrics": _metric_payload(quality),
         "daily_predictions": daily_rows,
         "feature_importance": feature_importance,
         "store_predictions": _series_by_entity(predictions, "store_name"),
         "category_predictions": _series_by_entity(predictions, "category"),
         "type_predictions": _series_by_entity(predictions, "product_type"),
-        "weather_info": weather_info,
-        "test_dates": sorted(predictions["date"].dt.strftime("%Y-%m-%d").unique()),
+        "dates": dates,
+        "hierarchy": hierarchy_rows,
+        "feature_catalog": feature_catalog,
+        "explanation_shards": {
+            date: f"explanations/{date}.json" for date in dates
+        },
         "top_errors": top_errors,
-        "shap_note": "TreeSHAP mean absolute contribution in cups; direction is not retained in this aggregate.",
+        "shap_note": (
+            "TreeSHAP 全局平均绝对贡献，单位为杯；逐预测解释保留方向并通过加法校验。"
+        ),
     }
 
 
+def build_explanation_shards(predictions, shap_contributions, generated_at):
+    predictions = predictions.copy()
+    predictions["date"] = pd.to_datetime(predictions["date"])
+    shap_groups = {
+        prediction_id: rows
+        for prediction_id, rows in shap_contributions.groupby("prediction_id")
+    }
+    shards = {}
+    for date, date_rows in predictions.groupby("date", sort=True):
+        records = []
+        for row in date_rows.sort_values(["store_name", "product_id"]).itertuples():
+            contributions = shap_groups[row.prediction_id].copy()
+            contributions["absolute"] = contributions["shap_contribution"].abs()
+            contributions = contributions.sort_values("absolute", ascending=False)
+            top = contributions.head(TOP_CONTRIBUTIONS)
+            detail = [
+                {
+                    "feature": item.feature,
+                    "value": _round(item.feature_value, 4),
+                    "contribution": _round(item.shap_contribution, 6),
+                    "direction": item.direction,
+                }
+                for item in top.itertuples()
+            ]
+            other = contributions.iloc[TOP_CONTRIBUTIONS:]["shap_contribution"].sum()
+            detail.append({
+                "feature": "other_features",
+                "value": None,
+                "contribution": _round(other, 6),
+                "direction": "increase" if other >= 0 else "decrease",
+            })
+            records.append({
+                "prediction_id": row.prediction_id,
+                "model_run_id": row.model_run_id,
+                "forecast_origin": row.forecast_origin,
+                "horizon_day": int(row.horizon_day),
+                "date": row.date.strftime("%Y-%m-%d"),
+                "store_id": int(row.store_id),
+                "store": row.store_name,
+                "category": row.category,
+                "type": row.product_type,
+                "sku": int(row.product_id),
+                "actual": _round(row.qty, 3),
+                "prediction": _round(row.pred_lightgbm, 6),
+                "raw_prediction": _round(row.pred_lightgbm_raw, 6),
+                "p10": _round(row.pred_p10, 6),
+                "p50": _round(row.pred_p50, 6),
+                "p90": _round(row.pred_p90, 6),
+                "error": _round(row.prediction_error, 6),
+                "base_value": _round(row.base_value, 6),
+                "postprocess_adjustment": _round(row.postprocess_adjustment, 6),
+                "additivity_error": _round(row.shap_additivity_error, 12),
+                "contributions": detail,
+            })
+        date_key = date.strftime("%Y-%m-%d")
+        shards[date_key] = {
+            "date": date_key,
+            "generated_at": generated_at,
+            "records": records,
+        }
+    return shards
+
+
 def export_dashboard_data(output_file=OUTPUT_FILE):
-    payload = build_dashboard_payload(
-        pd.read_csv(MODEL_DIR / "test_predictions.csv"),
-        pd.read_csv(MODEL_DIR / "daily_predictions.csv"),
-        pd.read_csv(MODEL_DIR / "shap_importance.csv"),
+    predictions = pd.read_csv(REPORT_DIR / "rolling_backtest_predictions.csv")
+    quality = pd.read_csv(REPORT_DIR / "rolling_backtest_quality.csv")
+    shap_contributions = pd.read_csv(
+        REPORT_DIR / "rolling_backtest_shap.csv.gz"
     )
+    run_metadata = json.loads(
+        (REPORT_DIR / "rolling_backtest_run.json").read_text(encoding="utf-8")
+    )
+    generated_at = datetime.now(timezone.utc).isoformat()
+    payload = build_dashboard_payload(
+        predictions,
+        quality,
+        shap_contributions,
+        run_metadata,
+        generated_at=generated_at,
+    )
+    shards = build_explanation_shards(
+        predictions, shap_contributions, generated_at
+    )
+
     output_file.parent.mkdir(parents=True, exist_ok=True)
+    if EXPLANATION_DIR.exists():
+        shutil.rmtree(EXPLANATION_DIR)
+    EXPLANATION_DIR.mkdir(parents=True)
     output_file.write_text(
         json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
         encoding="utf-8",
     )
+    for date, shard in shards.items():
+        (EXPLANATION_DIR / f"{date}.json").write_text(
+            json.dumps(shard, ensure_ascii=False, separators=(",", ":")),
+            encoding="utf-8",
+        )
     return payload
 
 
 if __name__ == "__main__":
     exported = export_dashboard_data()
     print(
-        f"Exported {len(exported['daily_predictions'])} validation days "
-        f"to {OUTPUT_FILE}"
+        f"Exported {len(exported['dates'])} rolling-backtest days and "
+        f"{len(exported['hierarchy'])} store-SKU combinations to {OUTPUT_FILE}"
     )

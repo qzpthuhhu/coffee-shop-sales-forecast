@@ -4,360 +4,636 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="icon" href="data:,">
-<title>Coffee Shop SKU 销量预测验证台</title>
+<title>Coffee Shop SKU 智能销量预测台</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
 <style>
 :root {
-  --bg: #0f1117; --card: #1a1d27; --border: #2a2d37; --text: #e4e6eb;
-  --text2: #8b8fa3; --accent: #6366f1; --accent2: #22c55e; --err: #ef4444;
-  --warn: #f59e0b; --coffee: #8B5E3C; --tea: #4ade80; --bakery: #fbbf24;
+  --paper:#f7f5f0; --surface:#fff; --ink:#211f1b; --muted:#6d6a63;
+  --line:#d9d5cc; --coffee:#332821; --cherry:#b4463e; --sage:#63806a;
+  --blue:#356b8c; --blue-soft:#dce9f0; --sage-soft:#e4ece5; --red-soft:#f4e3e0;
+  --shadow:0 8px 24px rgba(51,40,33,.07);
 }
-* { margin:0; padding:0; box-sizing:border-box; }
-body { background:var(--bg); color:var(--text); font-family:-apple-system,system-ui,sans-serif; line-height:1.6; overflow-x:hidden; }
-.container { max-width:1280px; margin:0 auto; padding:0 24px; }
-
-/* Hero */
-.hero { padding:60px 0 40px; text-align:center; border-bottom:1px solid var(--border); margin-bottom:32px; }
-.hero h1 { font-size:2.2rem; margin-bottom:8px; background:linear-gradient(135deg,var(--accent),var(--accent2)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
-.hero p { color:var(--text2); font-size:1.05rem; max-width:600px; margin:0 auto; }
-
-/* Tabs */
-.tabs { display:flex; gap:4px; margin-bottom:20px; flex-wrap:wrap; }
-.tab { padding:8px 18px; background:var(--card); border:1px solid var(--border); color:var(--text2); border-radius:8px; cursor:pointer; font-size:0.9rem; transition:all .2s; }
-.tab:hover { border-color:var(--accent); color:var(--text); }
-.tab.active { background:var(--accent); border-color:var(--accent); color:#fff; }
-
-/* Cards */
-.card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:24px; margin-bottom:24px; }
-.card h2 { font-size:1.2rem; margin-bottom:16px; color:var(--text); }
-.card h3 { font-size:1rem; margin:12px 0 8px; color:var(--text2); }
-
-/* Metrics */
-.metrics { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:16px; margin-bottom:24px; }
-.metric { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:16px; text-align:center; }
-.metric .value { font-size:1.4rem; font-weight:700; }
-.metric .label { font-size:0.8rem; color:var(--text2); margin-top:4px; }
-.metric.accent .value { color:var(--accent); }
-.metric.good .value { color:var(--accent2); }
-
-/* Chart wrappers */
-.chart-wrap { position:relative; height:340px; margin:8px 0; }
-.chart-wrap.large { height:420px; }
-.chart-wrap canvas { width:100%!important; }
-
-/* Feature grid */
-.fi-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:12px; }
-.fi-item { background:#252836; border-radius:8px; padding:12px 16px; display:flex; align-items:center; gap:12px; min-width:0; }
-.fi-rank { font-size:0.75rem; color:var(--text2); min-width:24px; }
-.fi-bar-bg { flex:1; height:8px; background:#393c4f; border-radius:4px; overflow:hidden; }
-.fi-bar { height:100%; border-radius:4px; background:var(--accent); }
-.fi-pct { font-size:0.8rem; color:var(--text2); min-width:50px; text-align:right; }
-.fi-name { font-size:0.85rem; flex:1; min-width:0; overflow-wrap:anywhere; }
-
-/* Chat */
-.chat-log { max-height:380px; overflow-y:auto; margin-bottom:16px; display:flex; flex-direction:column; gap:12px; }
-.chat-msg { padding:12px 16px; border-radius:10px; font-size:0.9rem; line-height:1.6; max-width:90%; }
-.chat-msg.user { background:var(--accent); color:#fff; align-self:flex-end; }
-.chat-msg.bot { background:#252836; color:var(--text); align-self:flex-start; }
-.chat-msg.system { background:transparent; color:var(--text2); font-size:0.8rem; align-self:center; text-align:center; }
-.chat-input-row { display:flex; gap:8px; }
-.chat-input-row input { flex:1; padding:10px 14px; background:#252836; border:1px solid var(--border); border-radius:8px; color:var(--text); font-size:0.9rem; }
-.chat-input-row input:focus { outline:none; border-color:var(--accent); }
-.chat-input-row button { padding:10px 20px; background:var(--accent); color:#fff; border:none; border-radius:8px; cursor:pointer; font-size:0.9rem; }
-.chat-input-row button:disabled { opacity:0.5; cursor:not-allowed; }
-
-/* Select dropdown */
-.lvl-select { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:12px; }
-.lvl-select select { padding:6px 12px; background:var(--card); border:1px solid var(--border); color:var(--text); border-radius:6px; font-size:0.85rem; }
-.lvl-select label { font-size:0.85rem; color:var(--text2); }
-
-/* Mobile */
-@media (max-width:768px) { .hero h1 { font-size:1.6rem; } .metrics { grid-template-columns:1fr 1fr; } .fi-grid { grid-template-columns:1fr; } }
-
-/* Loading */
-.spinner { display:inline-block; width:16px; height:16px; border:2px solid transparent; border-top-color:#fff; border-radius:50%; animation:spin .6s linear infinite; margin-right:6px; }
-@keyframes spin { to { transform:rotate(360deg); } }
-
-/* Section spacing */
-.section-title { font-size:1.4rem; margin:40px 0 16px; padding-bottom:8px; border-bottom:2px solid var(--accent); display:inline-block; }
-
-pre { background:#252836; padding:16px; border-radius:8px; overflow-x:auto; font-size:0.85rem; }
-code { font-size:0.85rem; background:#252836; padding:2px 6px; border-radius:4px; }
-#method-content { max-width:100%; overflow-x:auto; }
-
-.error-banner { background:#451a1a; border:1px solid var(--err); border-radius:8px; padding:12px 16px; color:#fca5a5; font-size:0.85rem; margin:12px 0; }
+* { box-sizing:border-box; }
+html { color-scheme:light; }
+body {
+  margin:0; background:var(--paper); color:var(--ink);
+  font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",sans-serif;
+  line-height:1.5; letter-spacing:0; overflow-x:hidden;
+}
+button,select { font:inherit; letter-spacing:0; }
+button,select,a { -webkit-tap-highlight-color:transparent; }
+button:focus-visible,select:focus-visible,a:focus-visible {
+  outline:3px solid rgba(53,107,140,.32); outline-offset:2px;
+}
+.shell { max-width:1440px; margin:0 auto; padding:0 28px 48px; }
+.topbar {
+  min-height:72px; display:flex; align-items:center; justify-content:space-between;
+  gap:20px; border-bottom:1px solid var(--line);
+}
+.brand { min-width:0; }
+.brand h1 { margin:0; font-size:20px; font-weight:720; color:var(--coffee); }
+.brand p { margin:2px 0 0; color:var(--muted); font-size:13px; }
+.run-state {
+  display:flex; align-items:center; gap:8px; flex:0 0 auto;
+  color:var(--sage); font-size:13px; font-weight:650;
+}
+.run-state::before { content:""; width:8px; height:8px; border-radius:50%; background:var(--sage); }
+.tabs { display:flex; gap:4px; padding:16px 0 12px; }
+.tab {
+  min-height:40px; padding:8px 14px; border:1px solid transparent;
+  border-radius:6px; background:transparent; color:var(--muted); cursor:pointer;
+}
+.tab:hover { color:var(--ink); background:#efede8; }
+.tab.active { color:var(--coffee); background:var(--surface); border-color:var(--line); font-weight:700; }
+.tab-panel[hidden] { display:none; }
+.notice {
+  margin:4px 0 16px; padding:10px 14px; border-left:3px solid var(--blue);
+  background:var(--blue-soft); color:#294f67; font-size:13px;
+}
+.metrics {
+  display:grid; grid-template-columns:repeat(6,minmax(0,1fr));
+  border:1px solid var(--line); background:var(--surface); margin-bottom:16px;
+}
+.metric { min-width:0; padding:16px; border-right:1px solid var(--line); }
+.metric:last-child { border-right:0; }
+.metric .label { color:var(--muted); font-size:12px; }
+.metric .value { margin-top:4px; font-size:23px; font-weight:750; color:var(--coffee); }
+.metric .sub { margin-top:2px; color:var(--muted); font-size:11px; }
+.grid { display:grid; grid-template-columns:minmax(0,1.65fr) minmax(300px,.85fr); gap:16px; }
+.panel { background:var(--surface); border:1px solid var(--line); padding:20px; min-width:0; }
+.panel + .panel { margin-top:16px; }
+.grid .panel + .panel { margin-top:0; }
+.panel-head { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; margin-bottom:14px; }
+.panel h2 { margin:0; font-size:16px; color:var(--coffee); }
+.panel-kicker { margin:3px 0 0; color:var(--muted); font-size:12px; }
+.chart-wrap { height:340px; position:relative; }
+.controls { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.field { display:flex; flex-direction:column; gap:5px; min-width:140px; }
+.field label { color:var(--muted); font-size:12px; font-weight:650; }
+.field select {
+  min-height:40px; max-width:100%; padding:7px 30px 7px 10px;
+  border:1px solid var(--line); border-radius:5px; background:var(--surface); color:var(--ink);
+}
+.fi-list { display:grid; gap:10px; }
+.fi-row { display:grid; grid-template-columns:minmax(120px,1fr) 1.3fr 64px; gap:10px; align-items:center; }
+.fi-label { min-width:0; font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.fi-track { height:7px; background:#ece9e2; overflow:hidden; }
+.fi-fill { height:100%; background:var(--blue); }
+.fi-value { text-align:right; color:var(--muted); font-size:12px; font-variant-numeric:tabular-nums; }
+.table-wrap { overflow-x:auto; }
+table { width:100%; border-collapse:collapse; font-size:13px; }
+th { color:var(--muted); font-weight:650; text-align:left; white-space:nowrap; }
+th,td { padding:10px 8px; border-bottom:1px solid #ebe8e1; }
+tbody tr:hover { background:#faf9f6; }
+.link-button {
+  border:0; background:transparent; color:var(--blue); padding:4px 0;
+  cursor:pointer; text-decoration:underline; text-underline-offset:3px;
+}
+.positive { color:var(--sage); }
+.negative { color:var(--cherry); }
+.explain-layout { display:grid; grid-template-columns:300px minmax(0,1fr); gap:16px; align-items:start; }
+.filter-panel { position:sticky; top:12px; }
+.filter-stack { display:grid; gap:12px; }
+.filter-stack .field { width:100%; }
+.filter-stack select { width:100%; }
+.trace-id {
+  margin-top:16px; padding-top:14px; border-top:1px solid var(--line);
+  color:var(--muted); font-size:11px; overflow-wrap:anywhere;
+}
+.explain-main { min-width:0; }
+.prediction-header {
+  display:flex; justify-content:space-between; align-items:flex-start;
+  gap:16px; margin-bottom:16px;
+}
+.prediction-title h2 { margin:0; font-size:19px; }
+.prediction-title p { margin:4px 0 0; color:var(--muted); font-size:13px; }
+.quality-tag {
+  padding:5px 9px; color:var(--sage); background:var(--sage-soft);
+  border:1px solid #c9d8cb; border-radius:4px; font-size:12px; white-space:nowrap;
+}
+.prediction-metrics {
+  display:grid; grid-template-columns:repeat(6,minmax(0,1fr));
+  border:1px solid var(--line); margin-bottom:16px;
+}
+.prediction-metric { padding:13px; border-right:1px solid var(--line); min-width:0; }
+.prediction-metric:last-child { border-right:0; }
+.prediction-metric span { display:block; color:var(--muted); font-size:11px; }
+.prediction-metric strong { display:block; margin-top:3px; font-size:18px; font-variant-numeric:tabular-nums; }
+.interval { grid-column:span 2; }
+.waterfall { display:grid; gap:7px; margin-top:14px; }
+.wf-row { display:grid; grid-template-columns:minmax(160px,220px) minmax(220px,1fr) 84px; gap:12px; align-items:center; min-height:31px; }
+.wf-name { min-width:0; }
+.wf-name strong { display:block; font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.wf-name span { display:block; color:var(--muted); font-size:10px; }
+.wf-track { position:relative; height:18px; background:#f0eee9; }
+.wf-track::after { content:""; position:absolute; left:var(--zero); top:-4px; bottom:-4px; width:1px; background:#aaa59b; }
+.wf-bar { position:absolute; top:3px; height:12px; min-width:2px; }
+.wf-bar.increase { background:var(--sage); }
+.wf-bar.decrease { background:var(--cherry); }
+.wf-bar.base,.wf-bar.final { background:var(--blue); width:3px!important; }
+.wf-delta { text-align:right; font-size:12px; font-weight:700; font-variant-numeric:tabular-nums; }
+.contribution-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin-top:14px; }
+.contribution {
+  padding:12px; border:1px solid var(--line); border-left:3px solid var(--sage);
+  min-width:0; background:#fcfbf8;
+}
+.contribution.down { border-left-color:var(--cherry); }
+.contribution-head { display:flex; justify-content:space-between; gap:10px; align-items:flex-start; }
+.contribution h3 { margin:0; font-size:13px; }
+.contribution-value { font-size:13px; font-weight:750; white-space:nowrap; }
+.contribution-meta { margin:4px 0 0; color:var(--muted); font-size:11px; overflow-wrap:anywhere; }
+.contribution p { margin:7px 0 0; color:#4f4c46; font-size:12px; }
+.empty,.loading,.error {
+  min-height:240px; display:grid; place-items:center; text-align:center;
+  color:var(--muted); border:1px dashed var(--line); padding:24px;
+}
+.error { color:var(--cherry); background:var(--red-soft); }
+.footer { margin-top:20px; color:var(--muted); font-size:11px; text-align:center; }
+@media (max-width:1100px) {
+  .metrics { grid-template-columns:repeat(3,1fr); }
+  .metric:nth-child(3) { border-right:0; }
+  .metric:nth-child(-n+3) { border-bottom:1px solid var(--line); }
+  .grid { grid-template-columns:1fr; }
+  .explain-layout { grid-template-columns:240px minmax(0,1fr); }
+  .prediction-metrics { grid-template-columns:repeat(3,1fr); }
+  .prediction-metric:nth-child(3) { border-right:0; }
+  .prediction-metric:nth-child(-n+3) { border-bottom:1px solid var(--line); }
+}
+@media (max-width:760px) {
+  .shell { padding:0 14px 32px; }
+  .topbar { align-items:flex-start; padding:15px 0; }
+  .brand h1 { font-size:17px; }
+  .brand p { font-size:11px; }
+  .run-state { font-size:11px; }
+  .tabs { overflow-x:auto; }
+  .tab { min-height:44px; white-space:nowrap; }
+  .metrics { grid-template-columns:repeat(2,1fr); }
+  .metric,.metric:nth-child(3) { border-right:1px solid var(--line); border-bottom:1px solid var(--line); }
+  .metric:nth-child(2n) { border-right:0; }
+  .metric:nth-last-child(-n+2) { border-bottom:0; }
+  .metric .value { font-size:20px; }
+  .panel { padding:15px; }
+  .panel-head,.prediction-header { flex-direction:column; }
+  .controls,.controls .field { width:100%; }
+  .controls select { width:100%; }
+  .chart-wrap { height:300px; }
+  .explain-layout { grid-template-columns:1fr; }
+  .filter-panel { position:static; }
+  .filter-stack { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .prediction-metrics { grid-template-columns:repeat(2,1fr); }
+  .prediction-metric,.prediction-metric:nth-child(3) { border-right:1px solid var(--line); border-bottom:1px solid var(--line); }
+  .prediction-metric:nth-child(2n) { border-right:0; }
+  .prediction-metric:nth-last-child(-n+2) { border-bottom:0; }
+  .interval { grid-column:span 1; }
+  .wf-row { grid-template-columns:minmax(110px,150px) minmax(130px,1fr) 64px; gap:7px; }
+  .contribution-list { grid-template-columns:1fr; }
+}
+@media (max-width:380px) {
+  .shell { padding-inline:10px; }
+  .filter-stack { grid-template-columns:1fr; }
+  .wf-row { grid-template-columns:105px minmax(110px,1fr) 56px; }
+}
 </style>
 </head>
 <body>
-
-<div class="container">
-  <!-- Header -->
-  <div class="hero">
-    <h1>Coffee Shop SKU 销量预测验证台</h1>
-    <p id="validation-scope">正在加载最近一次可信验证结果...</p>
-  </div>
-
-  <!-- Key Metrics -->
-  <div class="metrics" id="metrics">
-    <div class="metric good"><div class="value" id="m-r2">--</div><div class="label">SKU 级 R²</div></div>
-    <div class="metric accent"><div class="value" id="m-mae">--</div><div class="label">MAE (杯/SKU)</div></div>
-    <div class="metric"><div class="value" id="m-rmse">--</div><div class="label">RMSE (杯/SKU)</div></div>
-    <div class="metric"><div class="value" id="m-p10">--</div><div class="label">±10% 命中率</div></div>
-    <div class="metric"><div class="value" id="m-p20">--</div><div class="label">±20% 命中率</div></div>
-    <div class="metric"><div class="value" id="m-samples">--</div><div class="label">验证样本</div></div>
-  </div>
-
-  <!-- === SECTION 1: Predictions Chart === -->
-  <div class="card">
-    <h2>预测 vs 实际销量</h2>
-    <div class="lvl-select">
-      <label>预测层级：</label>
-      <select id="lvl-select" onchange="switchLevel()">
-        <option value="daily">日总量</option>
-        <option value="store">门店</option>
-        <option value="category">品类</option>
-        <option value="type">子类型</option>
-      </select>
-      <select id="lvl-entity" style="display:none;"></select>
+<main class="shell">
+  <header class="topbar">
+    <div class="brand">
+      <h1>Coffee Shop SKU 智能销量预测台</h1>
+      <p id="scope">正在读取可信滚动回测产物</p>
     </div>
-    <div class="chart-wrap large"><canvas id="chartPred"></canvas></div>
-  </div>
+    <div class="run-state" id="run-state">数据加载中</div>
+  </header>
 
-  <!-- === SECTION 2: Feature Importance === -->
-  <div class="card">
-    <h2>SHAP 特征重要性</h2>
-    <p style="color:var(--text2);font-size:0.9rem;margin-bottom:12px;">
-      当前训练模型的 TreeSHAP 绝对贡献均值，单位为杯。历史销量特征均严格滞后，<code>sku_share_28d</code> 仅使用预测日前 28 天数据。
-    </p>
-    <div class="fi-grid" id="fi-grid"></div>
-    <p style="color:var(--text2);font-size:0.75rem;margin-top:8px;" id="fi-note"></p>
-  </div>
+  <nav class="tabs" aria-label="分析视图">
+    <button class="tab active" data-tab="overview" aria-selected="true">经营总览</button>
+    <button class="tab" data-tab="explain" aria-selected="false">逐预测解释</button>
+  </nav>
 
-  <!-- === SECTION 3: Methodology === -->
-  <div class="card" id="method-card">
-    <h2>方法原理</h2>
-    <p style="color:var(--text2);margin-bottom:12px;">以下内容由系统生成，全面介绍模型架构与预测流程。</p>
-    <div id="method-content"></div>
-  </div>
+  <div id="fatal-error" class="error" hidden></div>
 
-  <!-- === SECTION 4: Error Table === -->
-  <div class="card">
-    <h2>预测偏差 Top 10</h2>
-    <div style="overflow-x:auto;">
-      <table style="width:100%;border-collapse:collapse;font-size:0.9rem;">
-        <thead><tr style="text-align:left;border-bottom:1px solid var(--border);"><th style="padding:8px">日期</th><th style="padding:8px">门店</th><th style="padding:8px">品类</th><th style="padding:8px">子类型</th><th style="padding:8px">实际</th><th style="padding:8px">预测</th><th style="padding:8px">偏差</th></tr></thead>
-        <tbody id="err-table"></tbody>
-      </table>
+  <section id="overview" class="tab-panel">
+    <div class="notice" id="limitation"></div>
+    <div class="metrics" aria-label="滚动回测指标">
+      <div class="metric"><div class="label">MAE</div><div class="value" id="m-mae">--</div><div class="sub">杯 / SKU / 日</div></div>
+      <div class="metric"><div class="label">WAPE</div><div class="value" id="m-wape">--</div><div class="sub">五窗口整体</div></div>
+      <div class="metric"><div class="label">R²</div><div class="value" id="m-r2">--</div><div class="sub">解释方差</div></div>
+      <div class="metric"><div class="label">P10-P90 覆盖率</div><div class="value" id="m-cover">--</div><div class="sub">CQR 边际覆盖</div></div>
+      <div class="metric"><div class="label">区间平均宽度</div><div class="value" id="m-width">--</div><div class="sub">杯 / SKU / 日</div></div>
+      <div class="metric"><div class="label">验证样本</div><div class="value" id="m-samples">--</div><div class="sub">门店 × SKU × 日</div></div>
     </div>
-  </div>
 
-  <p style="text-align:center;color:var(--text2);font-size:0.8rem;padding:32px 0;">
-    <span id="model-footer">加载模型信息...</span>
-  </p>
-</div>
+    <div class="grid">
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>实际销量与点预测</h2>
+            <p class="panel-kicker">单位：杯；误差为实际值减预测值</p>
+          </div>
+          <div class="controls">
+            <div class="field">
+              <label for="level">聚合层级</label>
+              <select id="level">
+                <option value="daily">全部门店</option>
+                <option value="store">门店</option>
+                <option value="category">品类</option>
+                <option value="type">子类型</option>
+              </select>
+            </div>
+            <div class="field" id="entity-field" hidden>
+              <label for="entity">分析对象</label>
+              <select id="entity"></select>
+            </div>
+          </div>
+        </div>
+        <div class="chart-wrap"><canvas id="prediction-chart" aria-label="实际销量与预测销量图"></canvas></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>模型依赖因素</h2>
+            <p class="panel-kicker">TreeSHAP 平均绝对贡献，单位：杯</p>
+          </div>
+        </div>
+        <div class="fi-list" id="feature-importance"></div>
+      </section>
+    </div>
+
+    <section class="panel" style="margin-top:16px">
+      <div class="panel-head">
+        <div>
+          <h2>高偏差预测</h2>
+          <p class="panel-kicker">点击 prediction_id 进入逐预测证据链</p>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>日期</th><th>门店</th><th>品类 / 子类型</th><th>SKU</th><th>实际</th><th>预测</th><th>误差</th><th>证据</th></tr></thead>
+          <tbody id="error-table"></tbody>
+        </table>
+      </div>
+    </section>
+  </section>
+
+  <section id="explain" class="tab-panel" hidden>
+    <div class="notice">SHAP 展示模型对当前预测的贡献方向与杯数。模型贡献，不代表因果；业务根因仍需结合促销、库存、客流等外部证据验证。</div>
+    <div class="explain-layout">
+      <aside class="panel filter-panel">
+        <h2>预测对象</h2>
+        <p class="panel-kicker" style="margin-bottom:14px">按门店 → 品类 → 子类型 → SKU → 日期筛选</p>
+        <div class="filter-stack">
+          <div class="field"><label for="f-store">门店</label><select id="f-store"></select></div>
+          <div class="field"><label for="f-category">品类</label><select id="f-category"></select></div>
+          <div class="field"><label for="f-type">子类型</label><select id="f-type"></select></div>
+          <div class="field"><label for="f-sku">SKU</label><select id="f-sku"></select></div>
+          <div class="field"><label for="f-date">日期</label><select id="f-date"></select></div>
+        </div>
+        <div class="trace-id" id="trace-id">尚未选择预测</div>
+      </aside>
+
+      <div class="explain-main">
+        <div id="explanation-loading" class="loading">正在读取逐预测证据...</div>
+        <div id="explanation-error" class="error" hidden></div>
+        <article id="explanation-content" hidden>
+          <section class="panel">
+            <div class="prediction-header">
+              <div class="prediction-title">
+                <h2 id="prediction-title"></h2>
+                <p id="prediction-subtitle"></p>
+              </div>
+              <div class="quality-tag">逐行加法已校验</div>
+            </div>
+            <div class="prediction-metrics">
+              <div class="prediction-metric"><span>实际销量</span><strong id="p-actual">--</strong></div>
+              <div class="prediction-metric"><span>点预测</span><strong id="p-prediction">--</strong></div>
+              <div class="prediction-metric"><span>预测误差</span><strong id="p-error">--</strong></div>
+              <div class="prediction-metric interval"><span>P10 / P50 / P90</span><strong id="p-interval">--</strong></div>
+              <div class="prediction-metric"><span>预测步长</span><strong id="p-horizon">--</strong></div>
+              <div class="prediction-metric"><span>模型基准值</span><strong id="p-base">--</strong></div>
+            </div>
+            <div class="panel-head">
+              <div>
+                <h2>SHAP 瀑布图</h2>
+                <p class="panel-kicker">基准值 + 44 项贡献 = 原始模型输出；非负裁剪作为独立后处理展示</p>
+              </div>
+            </div>
+            <div class="waterfall" id="waterfall"></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <h2>因素证据明细</h2>
+                <p class="panel-kicker">Top 10 因素显示原始特征值、方向、贡献杯数与中文业务解释</p>
+              </div>
+            </div>
+            <div class="contribution-list" id="contribution-list"></div>
+          </section>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <footer class="footer" id="footer">Global LightGBM · 加载模型批次...</footer>
+</main>
 
 <script>
-// ==================== DATA ====================
-let DATA = {};
-let activeLevel = 'daily';
-let activeEntity = '';
-let charts = {};
+let DATA = null;
+let chart = null;
+const shardCache = new Map();
+const COLORS = { actual:'#332821', prediction:'#356b8c', error:'#b4463e' };
 
-async function loadData() {
-  const r = await fetch('data.json');
-  DATA = await r.json();
-  init();
+const byId = id => document.getElementById(id);
+const fmt = (value, digits=1) => Number(value).toLocaleString('zh-CN', { maximumFractionDigits:digits, minimumFractionDigits:digits });
+const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+
+function setOptions(select, values, formatter=value => value) {
+  select.innerHTML = values.map(value => `<option value="${esc(value)}">${esc(formatter(value))}</option>`).join('');
 }
 
-// ==================== METRICS ====================
-function computeMetrics() {
-  const metrics = DATA.metrics;
-  const metadata = DATA.metadata;
-  document.getElementById('m-r2').textContent = metrics.r2.toFixed(3);
-  document.getElementById('m-mae').textContent = metrics.mae.toFixed(2);
-  document.getElementById('m-rmse').textContent = metrics.rmse.toFixed(2);
-  document.getElementById('m-p10').textContent = `${metrics.within_10pct.toFixed(1)}%`;
-  document.getElementById('m-p20').textContent = `${metrics.within_20pct.toFixed(1)}%`;
-  document.getElementById('m-samples').textContent = metadata.sample_count.toLocaleString();
-  document.getElementById('validation-scope').textContent =
-    `${metadata.validation_start} 至 ${metadata.validation_end} · ${metadata.validation_days} 天单次留出验证 · ` +
-    `${metadata.sample_count.toLocaleString()} 个门店 × SKU × 日样本`;
-  document.getElementById('model-footer').textContent =
-    `${metadata.model_name} · ${metadata.feature_count} 个特征 · 单次 7 天留出验证，不代表生产精度`;
+function showFatal(message) {
+  byId('fatal-error').hidden = false;
+  byId('fatal-error').textContent = message;
+  byId('run-state').textContent = '数据不可用';
 }
 
-// ==================== CHARTS ====================
-const COLORS = {
-  actual: '#6366f1', pred: '#22c55e', diff: '#f59e0b',
-  stores: ['#6366f1','#22c55e','#f59e0b'],
-  cats: ['#6366f1','#22c55e','#f59e0b','#ef4444','#ec4899','#8b5cf6','#3b82f6','#06b6d4','#84cc16'],
-};
+function renderMetrics() {
+  const m = DATA.metrics;
+  const meta = DATA.metadata;
+  byId('m-mae').textContent = fmt(m.mae, 3);
+  byId('m-wape').textContent = `${fmt(m.wape, 1)}%`;
+  byId('m-r2').textContent = fmt(m.r2, 3);
+  byId('m-cover').textContent = `${fmt(m.interval_coverage, 1)}%`;
+  byId('m-width').textContent = fmt(m.interval_mean_width, 2);
+  byId('m-samples').textContent = meta.sample_count.toLocaleString('zh-CN');
+  byId('scope').textContent = `${meta.validation_start} 至 ${meta.validation_end} · ${meta.backtest_windows} 个滚动起点 · 未来 1-7 天`;
+  byId('run-state').textContent = m.candidate_eligible ? '候选模型' : '未通过候选门槛';
+  byId('limitation').textContent = `验证边界：${meta.limitations.join(' ')}`;
+  byId('footer').textContent = `${meta.model_name} · ${meta.model_run_id} · ${meta.feature_count} 个特征 · 产物生成于 ${meta.artifact_generated_at}`;
+}
 
-function chartPred() {
-  if (charts.pred) charts.pred.destroy();
-  const ctx = document.getElementById('chartPred').getContext('2d');
-  
-  let labels, actuals, preds;
-  if (activeLevel === 'daily') {
-    const d = DATA.daily_predictions;
-    labels = d.map(x => x.date.slice(5));
-    actuals = d.map(x => x.actual);
-    preds = d.map(x => x.pred);
-  } else {
-    const src = activeLevel === 'store' ? DATA.store_predictions :
-                activeLevel === 'category' ? DATA.category_predictions :
-                DATA.type_predictions;
-    const allEntities = Object.keys(src);
-    if (!activeEntity) activeEntity = allEntities[0];
-    updateEntitySelect(allEntities);
-    const ent = src[activeEntity];
-    labels = ent.dates.map(x => x.slice(5));
-    actuals = ent.actual;
-    preds = ent.pred;
+function currentSeries() {
+  const level = byId('level').value;
+  if (level === 'daily') {
+    const rows = DATA.daily_predictions;
+    return { dates:rows.map(row => row.date), actual:rows.map(row => row.actual), pred:rows.map(row => row.pred) };
   }
-  
-  // Diff
-  const diffs = actuals.map((a,i) => a - preds[i]);
-  
-  charts.pred = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels,
-      datasets: [
-        { label:'误差 (杯)', data:diffs, backgroundColor:diffs.map(d=>d>0?'rgba(99,102,241,0.4)':'rgba(239,68,68,0.4)'), borderColor:'transparent', yAxisID:'y1', order:1 },
-        { label:'实际销量', data:actuals, backgroundColor:'transparent', borderColor:COLORS.actual, borderWidth:2.5, pointRadius:5, pointBackgroundColor:COLORS.actual, tension:0.3, type:'line', order:0 },
-        { label:'预测销量', data:preds, backgroundColor:'transparent', borderColor:COLORS.pred, borderWidth:2.5, borderDash:[6,3], pointRadius:4, pointBackgroundColor:COLORS.pred, tension:0.3, type:'line', order:0 },
+  const source = level === 'store' ? DATA.store_predictions : level === 'category' ? DATA.category_predictions : DATA.type_predictions;
+  return source[byId('entity').value];
+}
+
+function renderChart() {
+  const series = currentSeries();
+  if (chart) chart.destroy();
+  chart = new Chart(byId('prediction-chart'), {
+    type:'line',
+    data:{
+      labels:series.dates.map(date => date.slice(5)),
+      datasets:[
+        { label:'实际销量', data:series.actual, borderColor:COLORS.actual, backgroundColor:'transparent', borderWidth:2, pointRadius:2, tension:.2 },
+        { label:'点预测', data:series.pred, borderColor:COLORS.prediction, backgroundColor:'transparent', borderWidth:2, borderDash:[5,4], pointRadius:2, tension:.2 }
       ]
     },
-    options: {
-      responsive:true, maintainAspectRatio:false,
-      interaction:{mode:'index',intersect:false},
+    options:{
+      responsive:true, maintainAspectRatio:false, interaction:{ mode:'index', intersect:false },
       plugins:{
-        tooltip:{callbacks:{label:ctx=>`${ctx.dataset.label}: ${ctx.raw.toFixed(0)} 杯`}},
-        legend:{labels:{color:'#8b8fa3',usePointStyle:true,pointStyle:'circle',padding:20}}
+        legend:{ labels:{ color:'#6d6a63', usePointStyle:true, pointStyle:'line' } },
+        tooltip:{ callbacks:{ label:context => `${context.dataset.label}: ${fmt(context.raw, 1)} 杯` } }
       },
       scales:{
-        y:{title:{display:true,text:'杯数',color:'#8b8fa3'},grid:{color:'#2a2d37'},ticks:{color:'#8b8fa3'}},
-        y1:{position:'right',title:{display:true,text:'偏差 (杯)',color:'#8b8fa3'},grid:{display:false},ticks:{color:'#8b8fa3'}},
-        x:{grid:{display:false},ticks:{color:'#8b8fa3'}}
+        x:{ grid:{ display:false }, ticks:{ color:'#6d6a63', maxRotation:0, autoSkip:true, maxTicksLimit:10 } },
+        y:{ beginAtZero:true, title:{ display:true, text:'杯', color:'#6d6a63' }, grid:{ color:'#ebe8e1' }, ticks:{ color:'#6d6a63' } }
       }
     }
   });
 }
 
-function updateEntitySelect(entities) {
-  const sel = document.getElementById('lvl-entity');
-  sel.style.display = 'inline';
-  sel.innerHTML = entities.map(e => `<option value="${e}">${e}</option>`).join('');
-  sel.value = activeEntity;
-  sel.onchange = () => { activeEntity = sel.value; chartPred(); };
-}
-
-function switchLevel() {
-  activeLevel = document.getElementById('lvl-select').value;
-  activeEntity = '';
-  const sel = document.getElementById('lvl-entity');
-  if (activeLevel === 'daily') { sel.style.display='none'; }
-  else {
-    const src = activeLevel==='store'?DATA.store_predictions:
-                activeLevel==='category'?DATA.category_predictions:
-                DATA.type_predictions;
-    activeEntity = Object.keys(src)[0];
+function updateEntityOptions() {
+  const level = byId('level').value;
+  const field = byId('entity-field');
+  if (level === 'daily') {
+    field.hidden = true;
+  } else {
+    field.hidden = false;
+    const source = level === 'store' ? DATA.store_predictions : level === 'category' ? DATA.category_predictions : DATA.type_predictions;
+    setOptions(byId('entity'), Object.keys(source));
   }
-  chartPred();
+  renderChart();
 }
 
-// ==================== FEATURE IMPORTANCE ====================
-function renderGlobalFI() {
-  const grid = document.getElementById('fi-grid');
-  const items = DATA.feature_importance;
-  if (!items || !items.length) { grid.innerHTML = '<p style="color:var(--text2)">无数据</p>'; return; }
-  const max = items[0]?.importance || 1;
-  grid.innerHTML = items.map((f,i) => {
-    const w = Math.max(1, (f.importance / max * 100));
-    const cm = {时序:'#6366f1',天气:'#06b6d4',日历:'#22c55e',节假日:'#f59e0b',品类:'#ec4899','品类/价格':'#ec4899'};
-    const color = cm[f.category] || '#8b5cf6';
-    return `<div class="fi-item">
-      <span class="fi-rank">#${i+1}</span>
-      <span class="fi-name" title="${f.feature}">${f.feature}</span>
-      <div class="fi-bar-bg"><div class="fi-bar" style="width:${w}%;background:${color}"></div></div>
-      <span class="fi-pct">${f.importance.toFixed(4)}</span>
-    </div>`;
-  }).join('');
-  document.getElementById('fi-note').textContent = DATA.shap_note || 'TreeSHAP — 特征对预测的期望贡献（SHAP绝对值均值）';
-}
-
-function renderFI() {
-  renderGlobalFI();
-}
-
-// ==================== ERROR TABLE ====================
-function renderErrTable() {
-  const tb = document.getElementById('err-table');
-  tb.innerHTML = DATA.top_errors.map(e => `
-    <tr style="border-bottom:1px solid var(--border)">
-      <td style="padding:8px">${e.date.slice(0,10)}</td>
-      <td style="padding:8px">${e.store}</td>
-      <td style="padding:8px">${e.category}</td>
-      <td style="padding:8px">${e.type}</td>
-      <td style="padding:8px">${e.actual}</td>
-      <td style="padding:8px">${e.pred}</td>
-      <td style="padding:8px;color:${e.error>0?'var(--accent2)':'var(--err)'}">${e.error>0?'+':''}${e.error}</td>
-    </tr>
+function renderFeatureImportance() {
+  const max = Math.max(...DATA.feature_importance.map(item => item.importance), 1);
+  byId('feature-importance').innerHTML = DATA.feature_importance.map(item => `
+    <div class="fi-row" title="${esc(item.feature)}">
+      <div class="fi-label">${esc(item.label)}</div>
+      <div class="fi-track"><div class="fi-fill" style="width:${Math.max(2,item.importance/max*100)}%"></div></div>
+      <div class="fi-value">${fmt(item.importance, 3)}</div>
+    </div>
   `).join('');
 }
 
-// ==================== METHODOLOGY ====================
-function renderMethod() {
-  const metadata = DATA.metadata;
-  const metrics = DATA.metrics;
-  const content = `
-### 整体架构：Global LightGBM
-
-当前实现使用官方 lightgbm 包的 LGBMRegressor，以一个全局模型处理所有门店和 SKU。
-
-#### 特征工程（44 个特征，五梯队）
-
-| 梯队 | 类别 | 特征数 | 代表特征 |
-|------|------|:---:|------|
-| 第一梯队 | 时序销量 | 14 | lag_1/2/3/7/14/28, rolling_mean/std 7/14/28d, dow_avg |
-| 第二梯队 | 日历基础 | 7 | day_of_week, is_weekend, day_of_month, week_of_month |
-| 第三梯队 | 天气 | 13 | 最高/最低/均温, 降水量, 是否下雨/雪/晴, 日照, 湿度 |
-| 第四梯队 | 节假日 | 5 | 13种节日详情, 节前1天/3天, 节后1天, 长周末 |
-| 第五梯队 | 品类/价格 | 2 | 价格相对品类均值, 前 28 天历史 SKU 占比 |
-
-#### 训练策略
-- **诊断交叉验证**：TimeSeriesSplit (n_splits=3)
-- **训练/测试**：前 174 天训练 (01/01-06/23)，最后 7 天测试 (06/24-06/30)
-- **集成**：HGB 权重 0.6 + GB 权重 0.4
-- **泄露防护**：所有标签衍生特征至少滞后 1 天，\`sku_share_28d\` 仅使用历史数据
-
-#### 当前可信验证结果
-| 范围 | 样本 | R² | MAE | RMSE | ±10% | ±20% |
-|------|------:|---:|----:|-----:|-----:|-----:|
-| ${metadata.validation_start} 至 ${metadata.validation_end} | ${metadata.sample_count.toLocaleString()} | ${metrics.r2.toFixed(3)} | ${metrics.mae.toFixed(2)} | ${metrics.rmse.toFixed(2)} | ${metrics.within_10pct.toFixed(1)}% | ${metrics.within_20pct.toFixed(1)}% |
-
-#### 可解释性
-- TreeSHAP 已通过加法校验，当前图表展示全局绝对贡献均值
-- 该聚合只表示模型依赖程度，不代表因果关系
-- 逐预测带符号 SHAP 尚未持久化，因此页面不展示伪造的逐日根因
-
-> 限制：这只是单个 7 天留出窗口，不可用于宣称生产精度。后续需要多个滚动 7 天窗口和朴素基线对照。
-`;
-  document.getElementById('method-content').innerHTML = marked.parse(content);
+function renderErrorTable() {
+  byId('error-table').innerHTML = DATA.top_errors.map(row => `
+    <tr>
+      <td>${esc(row.date)}</td><td>${esc(row.store)}</td>
+      <td>${esc(row.category)} / ${esc(row.type)}</td><td>${row.sku}</td>
+      <td>${fmt(row.actual,1)}</td><td>${fmt(row.pred,1)}</td>
+      <td class="${row.error >= 0 ? 'positive' : 'negative'}">${row.error >= 0 ? '+' : ''}${fmt(row.error,1)}</td>
+      <td><button class="link-button" data-prediction="${esc(row.prediction_id)}">查看解释</button></td>
+    </tr>
+  `).join('');
+  document.querySelectorAll('[data-prediction]').forEach(button => {
+    button.addEventListener('click', () => openPrediction(button.dataset.prediction));
+  });
 }
 
-// ==================== INIT ====================
-function init() {
-  computeMetrics();
-  chartPred();
-  renderFI();
-  renderErrTable();
-  renderMethod();
+function hierarchyRows(filters={}) {
+  return DATA.hierarchy.filter(row =>
+    (filters.store === undefined || row.store === filters.store) &&
+    (filters.category === undefined || row.category === filters.category) &&
+    (filters.type === undefined || row.type === filters.type)
+  );
 }
 
-loadData();
+function unique(rows, field) {
+  return [...new Set(rows.map(row => row[field]))].sort((a,b) => String(a).localeCompare(String(b), 'zh-CN', { numeric:true }));
+}
+
+function initializeFilters() {
+  setOptions(byId('f-store'), unique(DATA.hierarchy, 'store'));
+  refreshCategories();
+  setOptions(byId('f-date'), [...DATA.dates].reverse());
+  ['f-store','f-category','f-type','f-sku','f-date'].forEach(id => {
+    byId(id).addEventListener('change', event => {
+      if (id === 'f-store') refreshCategories();
+      if (id === 'f-category') refreshTypes();
+      if (id === 'f-type') refreshSkus();
+      loadSelectedExplanation();
+    });
+  });
+}
+
+function refreshCategories(selected) {
+  const rows = hierarchyRows({ store:byId('f-store').value });
+  setOptions(byId('f-category'), unique(rows, 'category'));
+  if (selected) byId('f-category').value = selected;
+  refreshTypes();
+}
+
+function refreshTypes(selected) {
+  const rows = hierarchyRows({ store:byId('f-store').value, category:byId('f-category').value });
+  setOptions(byId('f-type'), unique(rows, 'type'));
+  if (selected) byId('f-type').value = selected;
+  refreshSkus();
+}
+
+function refreshSkus(selected) {
+  const rows = hierarchyRows({ store:byId('f-store').value, category:byId('f-category').value, type:byId('f-type').value });
+  setOptions(byId('f-sku'), unique(rows, 'sku'), value => `SKU ${value}`);
+  if (selected !== undefined) byId('f-sku').value = String(selected);
+}
+
+async function getShard(date) {
+  if (shardCache.has(date)) return shardCache.get(date);
+  const response = await fetch(DATA.explanation_shards[date], { cache:'no-store' });
+  if (!response.ok) throw new Error(`日期分片读取失败：HTTP ${response.status}`);
+  const shard = await response.json();
+  shardCache.set(date, shard);
+  return shard;
+}
+
+async function loadSelectedExplanation() {
+  byId('explanation-loading').hidden = false;
+  byId('explanation-error').hidden = true;
+  byId('explanation-content').hidden = true;
+  try {
+    const date = byId('f-date').value;
+    const shard = await getShard(date);
+    const record = shard.records.find(item =>
+      item.store === byId('f-store').value && item.sku === Number(byId('f-sku').value)
+    );
+    if (!record) throw new Error('当前筛选条件没有对应预测记录。');
+    renderExplanation(record);
+    byId('explanation-loading').hidden = true;
+    byId('explanation-content').hidden = false;
+  } catch (error) {
+    byId('explanation-loading').hidden = true;
+    byId('explanation-error').hidden = false;
+    byId('explanation-error').textContent = error.message;
+  }
+}
+
+function renderExplanation(record) {
+  byId('prediction-title').textContent = `${record.store} · SKU ${record.sku}`;
+  byId('prediction-subtitle').textContent = `${record.date} · ${record.category} / ${record.type} · 起点 ${record.forecast_origin}`;
+  byId('p-actual').textContent = `${fmt(record.actual,1)} 杯`;
+  byId('p-prediction').textContent = `${fmt(record.prediction,1)} 杯`;
+  byId('p-error').textContent = `${record.error >= 0 ? '+' : ''}${fmt(record.error,1)} 杯`;
+  byId('p-error').className = record.error >= 0 ? 'positive' : 'negative';
+  byId('p-interval').textContent = `${fmt(record.p10,1)} / ${fmt(record.p50,1)} / ${fmt(record.p90,1)} 杯`;
+  byId('p-horizon').textContent = `T+${record.horizon_day}`;
+  byId('p-base').textContent = `${fmt(record.base_value,2)} 杯`;
+  byId('trace-id').innerHTML = `prediction_id<br><strong>${esc(record.prediction_id)}</strong><br><br>model_run_id<br><strong>${esc(record.model_run_id)}</strong>`;
+  renderWaterfall(record);
+  byId('contribution-list').innerHTML = record.contributions.map(item => {
+    const meta = DATA.feature_catalog[item.feature];
+    const explanation = item.contribution >= 0 ? meta.increase_explanation : meta.decrease_explanation;
+    return `
+    <article class="contribution ${item.contribution < 0 ? 'down' : ''}">
+      <div class="contribution-head">
+        <h3>${esc(meta.label)}</h3>
+        <span class="contribution-value ${item.contribution >= 0 ? 'positive' : 'negative'}">${item.contribution >= 0 ? '+' : ''}${fmt(item.contribution,3)} 杯</span>
+      </div>
+      <div class="contribution-meta">${esc(meta.category)} · 原始值：${item.value === null ? '合并项' : esc(item.value)} · ${esc(item.feature)}</div>
+      <p>${esc(explanation)}</p>
+    </article>
+  `}).join('');
+}
+
+function renderWaterfall(record) {
+  const steps = [];
+  let current = record.base_value;
+  steps.push({ label:'模型基准值', meta:'expected value', start:current, end:current, value:current, kind:'base' });
+  record.contributions.forEach(item => {
+    const next = current + item.contribution;
+    steps.push({ label:DATA.feature_catalog[item.feature].label, meta:item.value === null ? '合并项' : `原始值 ${item.value}`, start:current, end:next, value:item.contribution, kind:item.contribution >= 0 ? 'increase' : 'decrease' });
+    current = next;
+  });
+  steps.push({ label:'原始模型输出', meta:`加法误差 ${record.additivity_error}`, start:record.raw_prediction, end:record.raw_prediction, value:record.raw_prediction, kind:'final' });
+  if (Math.abs(record.postprocess_adjustment) > 1e-9) {
+    steps.push({ label:'非负后处理', meta:'独立于 SHAP', start:record.raw_prediction, end:record.prediction, value:record.postprocess_adjustment, kind:'increase' });
+  }
+  steps.push({ label:'最终点预测', meta:'页面使用值', start:record.prediction, end:record.prediction, value:record.prediction, kind:'final' });
+  const values = steps.flatMap(step => [step.start, step.end, 0]);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = Math.max(max-min, 1);
+  const pct = value => (value-min)/span*100;
+  const zero = pct(0);
+  byId('waterfall').style.setProperty('--zero', `${zero}%`);
+  byId('waterfall').innerHTML = steps.map(step => {
+    const left = pct(Math.min(step.start, step.end));
+    const width = Math.max(Math.abs(pct(step.end)-pct(step.start)), step.kind === 'base' || step.kind === 'final' ? 0.5 : 0.8);
+    const signed = step.kind === 'base' || step.kind === 'final' ? fmt(step.value,2) : `${step.value >= 0 ? '+' : ''}${fmt(step.value,3)}`;
+    return `<div class="wf-row">
+      <div class="wf-name"><strong>${esc(step.label)}</strong><span>${esc(step.meta)}</span></div>
+      <div class="wf-track"><div class="wf-bar ${step.kind}" style="left:${left}%;width:${width}%"></div></div>
+      <div class="wf-delta ${step.value >= 0 ? 'positive' : 'negative'}">${signed}</div>
+    </div>`;
+  }).join('');
+}
+
+async function openPrediction(predictionId) {
+  const errorRow = DATA.top_errors.find(item => item.prediction_id === predictionId);
+  if (!errorRow) return;
+  const hierarchy = DATA.hierarchy.find(item => item.store === errorRow.store && item.sku === errorRow.sku);
+  byId('f-store').value = hierarchy.store;
+  refreshCategories(hierarchy.category);
+  refreshTypes(hierarchy.type);
+  refreshSkus(hierarchy.sku);
+  byId('f-date').value = errorRow.date;
+  activateTab('explain');
+  await loadSelectedExplanation();
+  byId('explain').scrollIntoView({ behavior:'smooth', block:'start' });
+}
+
+function activateTab(name) {
+  document.querySelectorAll('.tab').forEach(tab => {
+    const active = tab.dataset.tab === name;
+    tab.classList.toggle('active', active);
+    tab.setAttribute('aria-selected', String(active));
+  });
+  document.querySelectorAll('.tab-panel').forEach(panel => panel.hidden = panel.id !== name);
+}
+
+function initializeInteractions() {
+  document.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click', () => {
+    activateTab(tab.dataset.tab);
+    if (tab.dataset.tab === 'explain') loadSelectedExplanation();
+  }));
+  byId('level').addEventListener('change', updateEntityOptions);
+  byId('entity').addEventListener('change', renderChart);
+}
+
+async function init() {
+  try {
+    const response = await fetch('data.json', { cache:'no-store' });
+    if (!response.ok) throw new Error(`总览数据读取失败：HTTP ${response.status}`);
+    DATA = await response.json();
+    renderMetrics();
+    initializeInteractions();
+    updateEntityOptions();
+    renderFeatureImportance();
+    renderErrorTable();
+    initializeFilters();
+    await loadSelectedExplanation();
+  } catch (error) {
+    showFatal(error.message);
+  }
+}
+
+init();
 </script>
 </body>
 </html>
