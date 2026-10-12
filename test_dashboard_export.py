@@ -109,6 +109,36 @@ class DashboardExportTest(unittest.TestCase):
         self.assertEqual(heatmap["unit"], "杯 / SKU / 日")
         self.assertNotIn(None, heatmap["rows"][0]["values"])
 
+    def test_risk_ranking_is_bounded_and_does_not_use_actual_sales(self):
+        risk = self.payload["risk_rankings"]
+
+        self.assertFalse(risk["uses_actual_sales"])
+        self.assertEqual(len(risk["by_date"]), 35)
+        self.assertEqual(
+            set(risk["by_date"]["2023-06-30"]),
+            {"__all__", "Astoria", "Hell's Kitchen", "Lower Manhattan"},
+        )
+        for scopes in risk["by_date"].values():
+            for rows in scopes.values():
+                self.assertLessEqual(len(rows), 10)
+                self.assertEqual(
+                    [row["upside_gap"] for row in rows],
+                    sorted(
+                        [row["upside_gap"] for row in rows],
+                        reverse=True,
+                    ),
+                )
+                self.assertTrue(
+                    all(
+                        {"actual", "qty", "error"}.isdisjoint(row)
+                        for row in rows
+                    )
+                )
+        top = risk["by_date"]["2023-06-30"]["__all__"][0]
+        self.assertEqual(top["store"], "Astoria")
+        self.assertEqual(top["sku"], 63)
+        self.assertAlmostEqual(top["upside_gap"], 9.0)
+
     def test_explanation_shard_preserves_prediction_additivity(self):
         sample_prediction = self.predictions.iloc[[0]]
         prediction_id = sample_prediction.iloc[0]["prediction_id"]
@@ -194,6 +224,10 @@ class DashboardExportTest(unittest.TestCase):
         self.assertIn('id="scenario-rain"', html)
         self.assertIn('id="scenario-holiday"', html)
         self.assertIn("function renderScenario", html)
+        self.assertIn("高风险 SKU 排名", html)
+        self.assertIn('id="risk-ranking"', html)
+        self.assertIn("function renderRiskRanking", html)
+        self.assertIn("不代表缺货概率", html)
 
 
 if __name__ == "__main__":

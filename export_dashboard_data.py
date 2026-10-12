@@ -16,6 +16,7 @@ EXPLANATION_DIR = ROOT / "dashboard" / "explanations"
 SCENARIO_FILE = REPORT_DIR / "rolling_backtest_scenarios.csv.gz"
 PREDICTION_COLUMN = "pred_lightgbm"
 TOP_CONTRIBUTIONS = 10
+RISK_RANKING_LIMIT = 10
 
 FEATURE_LABELS = {
     "price": "商品单价",
@@ -228,6 +229,57 @@ def _demand_heatmap_payload(predictions):
     }
 
 
+def _risk_ranking_payload(predictions):
+    frame = predictions.copy()
+    frame["date_key"] = frame["date"].dt.strftime("%Y-%m-%d")
+    frame["upside_gap"] = (
+        frame["pred_p90"] - frame[PREDICTION_COLUMN]
+    ).clip(lower=0)
+    rankings = {}
+    stores = sorted(frame["store_name"].unique())
+    for date, date_rows in frame.groupby("date_key", sort=True):
+        rankings[date] = {}
+        for scope in ["__all__", *stores]:
+            scoped = (
+                date_rows
+                if scope == "__all__"
+                else date_rows[date_rows["store_name"] == scope]
+            )
+            top = scoped.nlargest(
+                RISK_RANKING_LIMIT,
+                ["upside_gap", PREDICTION_COLUMN],
+            )
+            rankings[date][scope] = [
+                {
+                    "prediction_id": row.prediction_id,
+                    "date": row.date_key,
+                    "store": row.store_name,
+                    "category": row.category,
+                    "type": row.product_type,
+                    "sku": int(row.product_id),
+                    "prediction": _round(row.pred_lightgbm, 1),
+                    "p90": _round(row.pred_p90, 1),
+                    "upside_gap": _round(row.upside_gap, 1),
+                    "interval_width": _round(
+                        row.pred_p90 - row.pred_p10,
+                        1,
+                    ),
+                }
+                for row in top.itertuples()
+            ]
+    return {
+        "ranking_limit": RISK_RANKING_LIMIT,
+        "metric": "P90 - 点预测",
+        "unit": "杯 / 门店 × SKU × 日",
+        "uses_actual_sales": False,
+        "scope_note": (
+            "按潜在追加需求杯数排序，仅用于备货关注；"
+            "未接入库存与在途数据，不代表缺货概率。"
+        ),
+        "by_date": rankings,
+    }
+
+
 def build_dashboard_payload(
     predictions, quality, shap_contributions, run_metadata, generated_at=None
 ):
@@ -345,6 +397,7 @@ def build_dashboard_payload(
         "metrics": _metric_payload(quality),
         "diagnostics": _diagnostic_payload(predictions),
         "demand_heatmap": _demand_heatmap_payload(predictions),
+        "risk_rankings": _risk_ranking_payload(predictions),
         "daily_predictions": daily_rows,
         "feature_importance": feature_importance,
         "store_predictions": _series_by_entity(predictions, "store_name"),

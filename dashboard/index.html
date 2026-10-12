@@ -144,6 +144,10 @@ button:focus-visible,select:focus-visible,a:focus-visible {
 .calendar-swatch.under { background:var(--cherry); }
 .calendar-swatch.close { background:var(--sage); }
 .calendar-swatch.over { background:var(--blue); }
+.risk-boundary {
+  margin:12px 0 0; padding:9px 11px; border-left:3px solid var(--blue);
+  background:var(--blue-soft); color:#294f67; font-size:12px;
+}
 .controls { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
 .field { display:flex; flex-direction:column; gap:5px; min-width:140px; }
 .field label { color:var(--muted); font-size:12px; font-weight:650; }
@@ -393,6 +397,32 @@ tbody tr:hover { background:#faf9f6; }
         <span class="heatmap-legend"><span>低</span><span class="heatmap-ramp"></span><span>高</span></span>
         <span>单元格颜色仅表示当前筛选范围内的相对需求</span>
       </div>
+    </section>
+
+    <section class="panel" style="margin-top:16px">
+      <div class="panel-head">
+        <div>
+          <h2>高风险 SKU 排名</h2>
+          <p class="panel-kicker" id="risk-note">按 P90 高于点预测的潜在追加需求排序，单位：杯</p>
+        </div>
+        <div class="controls">
+          <div class="field">
+            <label for="risk-date">预测日期</label>
+            <select id="risk-date"></select>
+          </div>
+          <div class="field">
+            <label for="risk-store">门店</label>
+            <select id="risk-store"></select>
+          </div>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>排名</th><th>门店</th><th>品类 / 子类型</th><th>SKU</th><th>点预测</th><th>P90</th><th>追加需求</th><th>区间宽度</th><th>证据</th></tr></thead>
+          <tbody id="risk-ranking"></tbody>
+        </table>
+      </div>
+      <p class="risk-boundary">这是模型区间的备货关注度，不代表缺货概率。当前未接入库存、在途、保质期或 BOM 数据。</p>
     </section>
 
     <section class="panel" style="margin-top:16px">
@@ -712,6 +742,48 @@ function renderHeatmap() {
       rows.find(row => row.sku === Number(button.dataset.heatmapRow)),
       button.dataset.heatmapDate
     ));
+  });
+}
+
+function initializeRiskRanking() {
+  const risk = DATA.risk_rankings;
+  const dates = Object.keys(risk.by_date).sort().reverse();
+  const stores = Object.keys(risk.by_date[dates[0]]).filter(store => store !== '__all__');
+  setOptions(byId('risk-date'), dates);
+  setOptions(
+    byId('risk-store'),
+    ['__all__', ...stores],
+    value => value === '__all__' ? '全部门店' : value
+  );
+  byId('risk-date').addEventListener('change', renderRiskRanking);
+  byId('risk-store').addEventListener('change', renderRiskRanking);
+  renderRiskRanking();
+}
+
+function renderRiskRanking() {
+  const risk = DATA.risk_rankings;
+  const date = byId('risk-date').value;
+  const store = byId('risk-store').value;
+  const rows = risk.by_date[date]?.[store] || [];
+  byId('risk-note').textContent = `${date} · ${risk.metric}，单位：${risk.unit}；榜单不使用实际销量`;
+  if (!rows.length) {
+    byId('risk-ranking').innerHTML = '<tr><td colspan="9">当前筛选范围没有可用风险记录。</td></tr>';
+    return;
+  }
+  byId('risk-ranking').innerHTML = rows.map((row, index) => `
+    <tr>
+      <td>${index + 1}</td><td>${esc(row.store)}</td>
+      <td>${esc(row.category)} / ${esc(row.type)}</td><td>${row.sku}</td>
+      <td>${fmt(row.prediction,1)}</td><td>${fmt(row.p90,1)}</td>
+      <td class="negative">+${fmt(row.upside_gap,1)}</td>
+      <td>${fmt(row.interval_width,1)}</td>
+      <td><button class="link-button" data-risk-index="${index}">查看解释</button></td>
+    </tr>
+  `).join('');
+  document.querySelectorAll('[data-risk-index]').forEach(button => {
+    button.addEventListener('click', () => {
+      openPredictionContext(rows[Number(button.dataset.riskIndex)]);
+    });
   });
 }
 
@@ -1098,26 +1170,24 @@ function renderWaterfall(record) {
 async function openPrediction(predictionId) {
   const errorRow = DATA.top_errors.find(item => item.prediction_id === predictionId);
   if (!errorRow) return;
-  const hierarchy = DATA.hierarchy.find(item => item.store === errorRow.store && item.sku === errorRow.sku);
+  await openPredictionContext(errorRow);
+}
+
+async function openPredictionContext(row) {
+  const hierarchy = DATA.hierarchy.find(item => item.store === row.store && item.sku === row.sku);
+  if (!hierarchy) return;
   byId('f-store').value = hierarchy.store;
   refreshCategories(hierarchy.category);
   refreshTypes(hierarchy.type);
   refreshSkus(hierarchy.sku);
-  byId('f-date').value = errorRow.date;
+  byId('f-date').value = row.date;
   activateTab('explain');
   await loadSelectedExplanation();
   byId('explain').scrollIntoView({ behavior:'smooth', block:'start' });
 }
 
 async function openHeatmapPrediction(row, date) {
-  byId('f-store').value = row.store;
-  refreshCategories(row.category);
-  refreshTypes(row.type);
-  refreshSkus(row.sku);
-  byId('f-date').value = date;
-  activateTab('explain');
-  await loadSelectedExplanation();
-  byId('explain').scrollIntoView({ behavior:'smooth', block:'start' });
+  await openPredictionContext({ ...row, date });
 }
 
 function activateTab(name) {
@@ -1148,6 +1218,7 @@ async function init() {
     updateEntityOptions();
     renderFeatureImportance();
     initializeHeatmap();
+    initializeRiskRanking();
     initializeCalendar();
     renderDiagnostics();
     renderErrorTable();
