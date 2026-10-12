@@ -201,6 +201,32 @@ def _diagnostic_payload(predictions):
     }
 
 
+def _demand_heatmap_payload(predictions):
+    dates = sorted(predictions["date"].dt.strftime("%Y-%m-%d").unique())
+    rows = []
+    for keys, group in predictions.groupby(
+        ["store_name", "category", "product_type", "product_id"], sort=True
+    ):
+        store, category, product_type, sku = keys
+        values_by_date = {
+            row.date.strftime("%Y-%m-%d"): _round(row.pred_lightgbm, 1)
+            for row in group.itertuples()
+        }
+        rows.append({
+            "store": store,
+            "category": category,
+            "type": product_type,
+            "sku": int(sku),
+            "values": [values_by_date.get(date) for date in dates],
+        })
+    return {
+        "dates": dates,
+        "rows": rows,
+        "unit": "杯 / SKU / 日",
+        "value": "Global LightGBM 点预测",
+    }
+
+
 def build_dashboard_payload(
     predictions, quality, shap_contributions, run_metadata, generated_at=None
 ):
@@ -317,6 +343,7 @@ def build_dashboard_payload(
         },
         "metrics": _metric_payload(quality),
         "diagnostics": _diagnostic_payload(predictions),
+        "demand_heatmap": _demand_heatmap_payload(predictions),
         "daily_predictions": daily_rows,
         "feature_importance": feature_importance,
         "store_predictions": _series_by_entity(predictions, "store_name"),

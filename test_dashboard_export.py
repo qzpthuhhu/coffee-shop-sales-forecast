@@ -88,6 +88,24 @@ class DashboardExportTest(unittest.TestCase):
         self.assertAlmostEqual(diagnostics["mean_error"], 0.773, places=3)
         self.assertIn("确定性抽样", diagnostics["scatter_sampling"])
 
+    def test_demand_heatmap_covers_each_store_sku_and_date(self):
+        heatmap = self.payload["demand_heatmap"]
+
+        self.assertEqual(len(heatmap["dates"]), 35)
+        self.assertEqual(len(heatmap["rows"]), 240)
+        self.assertEqual(
+            sum(len(row["values"]) for row in heatmap["rows"]),
+            len(self.predictions),
+        )
+        self.assertTrue(
+            all(
+                len(row["values"]) == len(heatmap["dates"])
+                for row in heatmap["rows"]
+            )
+        )
+        self.assertEqual(heatmap["unit"], "杯 / SKU / 日")
+        self.assertNotIn(None, heatmap["rows"][0]["values"])
+
     def test_explanation_shard_preserves_prediction_additivity(self):
         sample_prediction = self.predictions.iloc[[0]]
         prediction_id = sample_prediction.iloc[0]["prediction_id"]
@@ -141,6 +159,8 @@ class DashboardExportTest(unittest.TestCase):
         self.assertIn("逐预测解释", html)
         self.assertIn("实际值 vs 预测值", html)
         self.assertIn("误差分布", html)
+        self.assertIn("SKU × 日期需求热力图", html)
+        self.assertIn("data-heatmap-row", html)
 
 
 if __name__ == "__main__":
