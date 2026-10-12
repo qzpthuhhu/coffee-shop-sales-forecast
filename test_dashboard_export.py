@@ -72,6 +72,22 @@ class DashboardExportTest(unittest.TestCase):
             "explanations/2023-06-27.json",
         )
 
+    def test_diagnostics_are_bounded_and_cover_all_errors(self):
+        diagnostics = self.payload["diagnostics"]
+
+        self.assertLessEqual(len(diagnostics["scatter"]), 870)
+        self.assertGreater(len(diagnostics["scatter"]), 800)
+        self.assertEqual(
+            sum(row["count"] for row in diagnostics["histogram"]),
+            len(self.predictions),
+        )
+        self.assertEqual(
+            diagnostics["histogram_sample_count"],
+            len(self.predictions),
+        )
+        self.assertAlmostEqual(diagnostics["mean_error"], 0.773, places=3)
+        self.assertIn("确定性抽样", diagnostics["scatter_sampling"])
+
     def test_explanation_shard_preserves_prediction_additivity(self):
         sample_prediction = self.predictions.iloc[[0]]
         prediction_id = sample_prediction.iloc[0]["prediction_id"]
@@ -123,6 +139,8 @@ class DashboardExportTest(unittest.TestCase):
         self.assertNotIn("69.6%", html)
         self.assertIn("模型贡献，不代表因果", html)
         self.assertIn("逐预测解释", html)
+        self.assertIn("实际值 vs 预测值", html)
+        self.assertIn("误差分布", html)
 
 
 if __name__ == "__main__":

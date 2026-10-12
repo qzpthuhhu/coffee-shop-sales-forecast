@@ -67,6 +67,16 @@ button:focus-visible,select:focus-visible,a:focus-visible {
 .panel h2 { margin:0; font-size:16px; color:var(--coffee); }
 .panel-kicker { margin:3px 0 0; color:var(--muted); font-size:12px; }
 .chart-wrap { height:340px; position:relative; }
+.diagnostic-grid {
+  display:grid; grid-template-columns:minmax(0,1.2fr) minmax(320px,.8fr);
+  gap:16px; margin-top:16px;
+}
+.diagnostic-grid .chart-wrap { height:300px; }
+.diagnostic-summary {
+  display:flex; gap:18px; flex-wrap:wrap; margin-top:12px; padding-top:12px;
+  border-top:1px solid #ebe8e1; color:var(--muted); font-size:12px;
+}
+.diagnostic-summary strong { color:var(--coffee); font-variant-numeric:tabular-nums; }
 .controls { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
 .field { display:flex; flex-direction:column; gap:5px; min-width:140px; }
 .field label { color:var(--muted); font-size:12px; font-weight:650; }
@@ -154,6 +164,7 @@ tbody tr:hover { background:#faf9f6; }
   .metric:nth-child(3) { border-right:0; }
   .metric:nth-child(-n+3) { border-bottom:1px solid var(--line); }
   .grid { grid-template-columns:1fr; }
+  .diagnostic-grid { grid-template-columns:1fr; }
   .explain-layout { grid-template-columns:240px minmax(0,1fr); }
   .prediction-metrics { grid-template-columns:repeat(3,1fr); }
   .prediction-metric:nth-child(3) { border-right:0; }
@@ -260,6 +271,33 @@ tbody tr:hover { background:#faf9f6; }
       </section>
     </div>
 
+    <div class="diagnostic-grid">
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>实际值 vs 预测值</h2>
+            <p class="panel-kicker" id="scatter-note">单位：杯 / SKU / 日；虚线代表完全准确</p>
+          </div>
+        </div>
+        <div class="chart-wrap"><canvas id="scatter-chart" aria-label="实际销量与预测销量散点图"></canvas></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>误差分布</h2>
+            <p class="panel-kicker">误差 = 实际值 - 预测值；正值表示模型低估</p>
+          </div>
+        </div>
+        <div class="chart-wrap"><canvas id="error-histogram" aria-label="预测误差分布直方图"></canvas></div>
+        <div class="diagnostic-summary">
+          <span>平均误差 <strong id="mean-error">--</strong></span>
+          <span>低估记录 <strong id="underprediction-rate">--</strong></span>
+          <span>全量样本 <strong id="histogram-samples">--</strong></span>
+        </div>
+      </section>
+    </div>
+
     <section class="panel" style="margin-top:16px">
       <div class="panel-head">
         <div>
@@ -341,6 +379,8 @@ tbody tr:hover { background:#faf9f6; }
 <script>
 let DATA = null;
 let chart = null;
+let scatterChart = null;
+let histogramChart = null;
 const shardCache = new Map();
 const COLORS = { actual:'#332821', prediction:'#356b8c', error:'#b4463e' };
 
@@ -431,6 +471,94 @@ function renderFeatureImportance() {
       <div class="fi-value">${fmt(item.importance, 3)}</div>
     </div>
   `).join('');
+}
+
+function renderDiagnostics() {
+  const diagnostics = DATA.diagnostics;
+  const storeColors = ['#332821', '#356b8c', '#63806a'];
+  const stores = [...new Set(diagnostics.scatter.map(point => point.store))];
+  const maximum = Math.ceil(Math.max(
+    ...diagnostics.scatter.flatMap(point => [point.x, point.y])
+  ));
+  if (scatterChart) scatterChart.destroy();
+  scatterChart = new Chart(byId('scatter-chart'), {
+    type:'scatter',
+    data:{
+      datasets:[
+        ...stores.map((store, index) => ({
+          label:store,
+          data:diagnostics.scatter.filter(point => point.store === store),
+          borderColor:storeColors[index % storeColors.length],
+          backgroundColor:`${storeColors[index % storeColors.length]}99`,
+          pointRadius:2.5,
+          pointHoverRadius:5
+        })),
+        {
+          type:'line',
+          label:'完全准确',
+          data:[{x:0,y:0},{x:maximum,y:maximum}],
+          borderColor:'#a39d92',
+          borderDash:[5,4],
+          borderWidth:1.5,
+          pointRadius:0
+        }
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      interaction:{ mode:'nearest', intersect:true },
+      plugins:{
+        legend:{ labels:{ color:'#6d6a63', usePointStyle:true, boxWidth:8 } },
+        tooltip:{ callbacks:{
+          label:context => {
+            if (context.dataset.label === '完全准确') return '完全准确线';
+            const point = context.raw;
+            return `${point.store} · ${point.date} · SKU ${point.sku}: 实际 ${fmt(point.x,1)}，预测 ${fmt(point.y,1)}，误差 ${point.error >= 0 ? '+' : ''}${fmt(point.error,1)} 杯`;
+          }
+        }}
+      },
+      scales:{
+        x:{ beginAtZero:true, title:{ display:true, text:'实际销量（杯）', color:'#6d6a63' }, grid:{ color:'#ebe8e1' }, ticks:{ color:'#6d6a63' } },
+        y:{ beginAtZero:true, title:{ display:true, text:'预测销量（杯）', color:'#6d6a63' }, grid:{ color:'#ebe8e1' }, ticks:{ color:'#6d6a63' } }
+      }
+    }
+  });
+
+  if (histogramChart) histogramChart.destroy();
+  const bins = diagnostics.histogram;
+  histogramChart = new Chart(byId('error-histogram'), {
+    type:'bar',
+    data:{
+      labels:bins.map(bin => `${bin.lower}～${bin.upper}`),
+      datasets:[{
+        label:'预测记录',
+        data:bins.map(bin => bin.count),
+        backgroundColor:bins.map(bin => bin.lower >= 0 ? '#b4463ecc' : bin.upper <= 0 ? '#63806acc' : '#356b8ccc'),
+        borderWidth:0,
+        borderRadius:2,
+        barPercentage:.94,
+        categoryPercentage:1
+      }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{ display:false },
+        tooltip:{ callbacks:{
+          title:items => `误差 ${items[0].label} 杯`,
+          label:context => `${context.raw.toLocaleString('zh-CN')} 条预测`
+        }}
+      },
+      scales:{
+        x:{ title:{ display:true, text:'误差区间（杯）', color:'#6d6a63' }, grid:{ display:false }, ticks:{ color:'#6d6a63', maxRotation:0, autoSkip:true, maxTicksLimit:8 } },
+        y:{ beginAtZero:true, title:{ display:true, text:'记录数', color:'#6d6a63' }, grid:{ color:'#ebe8e1' }, ticks:{ color:'#6d6a63', precision:0 } }
+      }
+    }
+  });
+  byId('scatter-note').textContent = `单位：杯 / SKU / 日；虚线代表完全准确。${diagnostics.scatter_sampling}`;
+  byId('mean-error').textContent = `${diagnostics.mean_error >= 0 ? '+' : ''}${fmt(diagnostics.mean_error,3)} 杯`;
+  byId('underprediction-rate').textContent = `${fmt(diagnostics.underprediction_rate,1)}%`;
+  byId('histogram-samples').textContent = diagnostics.histogram_sample_count.toLocaleString('zh-CN');
 }
 
 function renderErrorTable() {
@@ -625,6 +753,7 @@ async function init() {
     initializeInteractions();
     updateEntityOptions();
     renderFeatureImportance();
+    renderDiagnostics();
     renderErrorTable();
     initializeFilters();
     await loadSelectedExplanation();

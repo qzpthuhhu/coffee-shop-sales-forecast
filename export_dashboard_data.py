@@ -1,6 +1,7 @@
 """Build the static dashboard snapshot from trusted rolling-backtest artifacts."""
 
 import json
+import math
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
@@ -134,6 +135,72 @@ def _metric_payload(quality):
     }
 
 
+def _diagnostic_payload(predictions):
+    sampled = (
+        predictions.assign(
+            _sample_key=predictions["prediction_id"].astype(str)
+        )
+        .sort_values(["date", "store_name", "_sample_key"])
+        .groupby(["date", "store_name"], as_index=False)
+        .head(8)
+    )
+    extremes = predictions.nlargest(30, "absolute_error")
+    sampled = (
+        pd.concat([sampled, extremes], ignore_index=True)
+        .drop_duplicates("prediction_id")
+        .sort_values(["date", "store_name", "product_id"])
+    )
+    scatter = [
+        {
+            "x": _round(row.qty, 3),
+            "y": _round(row.pred_lightgbm, 3),
+            "date": row.date.strftime("%Y-%m-%d"),
+            "store": row.store_name,
+            "sku": int(row.product_id),
+            "error": _round(row.prediction_error, 3),
+        }
+        for row in sampled.itertuples()
+    ]
+
+    bin_width = 2
+    minimum = math.floor(predictions["prediction_error"].min() / bin_width) * bin_width
+    maximum = math.ceil(predictions["prediction_error"].max() / bin_width) * bin_width
+    histogram = []
+    for lower in range(minimum, maximum, bin_width):
+        upper = lower + bin_width
+        if upper == maximum:
+            count = int(
+                predictions["prediction_error"].between(
+                    lower, upper, inclusive="both"
+                ).sum()
+            )
+        else:
+            count = int(
+                (
+                    (predictions["prediction_error"] >= lower)
+                    & (predictions["prediction_error"] < upper)
+                ).sum()
+            )
+        histogram.append({
+            "lower": lower,
+            "upper": upper,
+            "count": count,
+        })
+
+    return {
+        "scatter": scatter,
+        "scatter_sampling": (
+            "每个门店每日确定性抽样 8 条，并保留绝对误差最大的 30 条预测。"
+        ),
+        "histogram": histogram,
+        "histogram_sample_count": int(len(predictions)),
+        "mean_error": _round(predictions["prediction_error"].mean(), 3),
+        "underprediction_rate": _round(
+            (predictions["prediction_error"] > 0).mean() * 100, 1
+        ),
+    }
+
+
 def build_dashboard_payload(
     predictions, quality, shap_contributions, run_metadata, generated_at=None
 ):
@@ -249,6 +316,7 @@ def build_dashboard_payload(
             "limitations": run_metadata["limitations"],
         },
         "metrics": _metric_payload(quality),
+        "diagnostics": _diagnostic_payload(predictions),
         "daily_predictions": daily_rows,
         "feature_importance": feature_importance,
         "store_predictions": _series_by_entity(predictions, "store_name"),
